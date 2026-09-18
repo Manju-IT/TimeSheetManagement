@@ -1,0 +1,175 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies.auth import get_current_user
+from app.core.config import settings
+from app.core.database import get_db
+from app.core.exceptions import Unauthenticated
+from app.core.logging import get_logger
+from app.core.permissions import CurrentUser, permissions_for
+from app.schemas.auth import (
+    AuthConfigResponse,
+    DevLoginRequest,
+    LogoutResponse,
+    MeResponse,
+    StartLoginResponse,
+)
+from app.services import auth_service
+
+log = get_logger("app.api.auth")
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _client_ip(request: Request) -> str | None:
+    # Trust X-Forwarded-For only when set by our own reverse proxy in a future phase.
+    return request.client.host if request.client else None
+
+
+def _set_session_cookie(response: Response, token: str, expires_in: int) -> None:
+    response.set_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        value=token,
+        max_age=expires_in,
+        httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE,
+        samesite=settings.SESSION_COOKIE_SAMESITE,
+        path="/",
+    )
+
+
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        path="/",
+        samesite=settings.SESSION_COOKIE_SAMESITE,
+    )
+
+
+@router.get("/config", response_model=AuthConfigResponse)
+async def auth_config() -> AuthConfigResponse:
+    return AuthConfigResponse(
+        oidc_enabled=settings.OIDC_ENABLED,
+        local_dev_auth=settings.LOCAL_DEV_AUTH and settings.APP_ENV in ("local", "dev"),
+        app_name=settings.APP_NAME,
+    )
+
+
+@router.post("/login", response_model=StartLoginResponse)
+async def start_login(
+    request: Request,
+    return_to: str | None = None,
+) -> StartLoginResponse:
+    url = await auth_service.start_oidc_login(
+        return_to=return_to,
+        ip=_client_ip(request),
+        ua=request.headers.get("user-agent"),
+    )
+    # state is embedded in the URL, no need to echo separately here; kept for clients.
+    return StartLoginResponse(authorize_url=url, state="")
+
+
+@router.get("/callback")
+async def oidc_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    if error:
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/login?error={error}",
+            status_code=status.HTTP_302_FOUND,
+        )
+    if not code or not state:
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/login?error=missing_params",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    issued, return_to = await auth_service.complete_oidc_login(
+        db,
+        code=code,
+        state=state,
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    response = RedirectResponse(url=return_to, status_code=status.HTTP_302_FOUND)
+    _set_session_cookie(response, issued.token, settings.SESSION_TTL_SECONDS)
+    return response
+
+
+@router.post("/dev-login", response_model=MeResponse)
+async def dev_login(
+    payload: DevLoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    issued = await auth_service.dev_login(
+        db,
+        email=str(payload.email),
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    me = await _build_me(db, issued.user.id)
+    response = JSONResponse(content=me.model_dump(mode="json"))
+    _set_session_cookie(response, issued.token, settings.SESSION_TTL_SECONDS)
+    return response
+
+
+@router.post("/logout", response_model=LogoutResponse)
+async def logout(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    user = None
+    try:
+        user = await get_current_user(request, db)
+    except Unauthenticated:
+        pass
+
+    if user is not None:
+        sid = getattr(request.state, "session_id", None)
+        if sid is not None:
+            await auth_service.logout(db, user_id=user.id, session_id=sid, ip=_client_ip(request))
+
+    end_url = await auth_service.ims_end_session_url()
+    response = JSONResponse(LogoutResponse(ok=True, ims_end_session_url=end_url).model_dump())
+    _clear_session_cookie(response)
+    return response
+
+
+@router.get("/me", response_model=MeResponse)
+async def me(
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MeResponse:
+    return await _build_me(db, user.id)
+
+
+async def _build_me(db: AsyncSession, user_id) -> MeResponse:  # noqa: ANN001
+    # Re-read the latest user; the CurrentUser object may be a moment old.
+    from sqlalchemy import select  # local import to keep module surface lean
+
+    from app.models.user import AppUser, UserRole
+
+    user = (await db.execute(select(AppUser).where(AppUser.id == user_id))).scalar_one()
+    roles = list(
+        (await db.execute(select(UserRole.role).where(UserRole.user_id == user.id))).scalars()
+    )
+    role_names = sorted({r.value for r in roles})
+    perms = sorted(permissions_for(frozenset(roles)))
+    return MeResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        timezone=user.timezone,
+        org_id=user.org_id,
+        github_login=user.github_login,
+        roles=role_names,
+        permissions=perms,
+    )
