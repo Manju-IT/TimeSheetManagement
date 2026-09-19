@@ -46,6 +46,7 @@ export function TimesheetPage() {
     ]);
 
     const [weekOffset, setWeekOffset] = useState<number>(0);
+    const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -132,6 +133,28 @@ export function TimesheetPage() {
         year: 'numeric',
     })}`;
 
+    const weekDays = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(currentWeekStart);
+        d.setDate(currentWeekStart.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        const dayEntries = entries.filter((e) => e.work_date === dateStr);
+        const dayTotal = dayEntries.reduce((acc, curr) => acc + curr.duration_minutes, 0);
+        return {
+            date: d,
+            dateStr,
+            dayName: d.toLocaleDateString(undefined, { weekday: 'short' }),
+            dayNum: d.getDate(),
+            entries: dayEntries,
+            totalMinutes: dayTotal,
+            isToday: d.toDateString() === new Date().toDateString(),
+        };
+    });
+
+    function handleOpenLogForDate(dateStr: string) {
+        setFormData((prev) => ({ ...prev, work_date: dateStr }));
+        setIsModalOpen(true);
+    }
+
     return (
         <div className="page">
             <header className="page-header">
@@ -206,12 +229,14 @@ export function TimesheetPage() {
                 </div>
             </div>
 
-            {/* Week Navigation */}
+            {/* Week Navigation & View Switcher */}
             <div
                 className="card"
                 style={{
                     marginBottom: 16,
                     display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 12,
                     alignItems: 'center',
                     justifyContent: 'space-between',
                 }}
@@ -224,82 +249,235 @@ export function TimesheetPage() {
                     <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(weekOffset + 1)}>
                         Next Week ▶
                     </button>
+                    {weekOffset !== 0 && (
+                        <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(0)}>
+                            Today's Week
+                        </button>
+                    )}
                 </div>
-                {weekOffset !== 0 && (
-                    <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(0)}>
-                        Today's Week
+
+                <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                        className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-ghost'}`}
+                        onClick={() => setViewMode('table')}
+                    >
+                        ☷ Table View
                     </button>
-                )}
+                    <button
+                        className={`btn btn-sm ${viewMode === 'calendar' ? 'btn-primary' : 'btn-ghost'}`}
+                        onClick={() => setViewMode('calendar')}
+                    >
+                        📅 Calendar View
+                    </button>
+                </div>
             </div>
 
-            {/* Entries Table */}
-            <div className="card">
-                <table className="table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Project</th>
-                            <th>Task & Description</th>
-                            <th>Duration</th>
-                            <th>Billable</th>
-                            <th>Status</th>
-                            <th style={{ textAlign: 'right' }}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {entries.length === 0 ? (
+            {/* View Mode: Table View */}
+            {viewMode === 'table' && (
+                <div className="card">
+                    <table className="table">
+                        <thead>
                             <tr>
-                                <td colSpan={7} style={{ textAlign: 'center', padding: '32px 0' }} className="muted">
-                                    No time entries logged for this period yet. Click <strong>+ Log Time</strong> to create one.
-                                </td>
+                                <th>Date</th>
+                                <th>Project</th>
+                                <th>Task & Description</th>
+                                <th>Duration</th>
+                                <th>Billable</th>
+                                <th>Status</th>
+                                <th style={{ textAlign: 'right' }}>Actions</th>
                             </tr>
-                        ) : (
-                            entries.map((item) => (
-                                <tr key={item.id}>
-                                    <td>
-                                        <strong>{item.work_date}</strong>
-                                    </td>
-                                    <td>{item.project_name}</td>
-                                    <td>
-                                        <div style={{ fontWeight: 500 }}>{item.task_title}</div>
-                                        {item.description && <div className="muted small">{item.description}</div>}
-                                    </td>
-                                    <td>
-                                        <strong>{formatHours(item.duration_minutes)}</strong>
-                                    </td>
-                                    <td>
-                                        {item.billable ? (
-                                            <span className="status-pill status-success">Billable</span>
-                                        ) : (
-                                            <span className="status-pill">Non-billable</span>
-                                        )}
-                                    </td>
-                                    <td>
-                                        <span
-                                            className="flag-pill"
-                                            style={{
-                                                textTransform: 'capitalize',
-                                            }}
-                                        >
-                                            {item.status}
-                                        </span>
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
-                                        <button
-                                            className="btn btn-ghost btn-sm"
-                                            style={{ color: 'var(--danger)' }}
-                                            onClick={() => handleDelete(item.id)}
-                                            disabled={item.status === 'approved' || isSubmitted}
-                                        >
-                                            Delete
-                                        </button>
+                        </thead>
+                        <tbody>
+                            {entries.length === 0 ? (
+                                <tr>
+                                    <td colSpan={7} style={{ textAlign: 'center', padding: '32px 0' }} className="muted">
+                                        No time entries logged for this period yet. Click <strong>+ Log Time</strong> to create one.
                                     </td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                            ) : (
+                                entries.map((item) => (
+                                    <tr key={item.id}>
+                                        <td>
+                                            <strong>{item.work_date}</strong>
+                                        </td>
+                                        <td>{item.project_name}</td>
+                                        <td>
+                                            <div style={{ fontWeight: 500 }}>{item.task_title}</div>
+                                            {item.description && <div className="muted small">{item.description}</div>}
+                                        </td>
+                                        <td>
+                                            <strong>{formatHours(item.duration_minutes)}</strong>
+                                        </td>
+                                        <td>
+                                            {item.billable ? (
+                                                <span className="status-pill status-success">Billable</span>
+                                            ) : (
+                                                <span className="status-pill">Non-billable</span>
+                                            )}
+                                        </td>
+                                        <td>
+                                            <span
+                                                className="flag-pill"
+                                                style={{
+                                                    textTransform: 'capitalize',
+                                                }}
+                                            >
+                                                {item.status}
+                                            </span>
+                                        </td>
+                                        <td style={{ textAlign: 'right' }}>
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                style={{ color: 'var(--danger)' }}
+                                                onClick={() => handleDelete(item.id)}
+                                                disabled={item.status === 'approved' || isSubmitted}
+                                            >
+                                                Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {/* View Mode: Weekly Calendar Timeline View */}
+            {viewMode === 'calendar' && (
+                <div className="card" style={{ overflowX: 'auto', padding: 12 }}>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(7, minmax(130px, 1fr))',
+                            gap: 10,
+                            minWidth: 920,
+                        }}
+                    >
+                        {weekDays.map((day) => (
+                            <div
+                                key={day.dateStr}
+                                style={{
+                                    background: day.isToday ? 'rgba(47, 129, 247, 0.08)' : 'var(--bg)',
+                                    border: day.isToday ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                    borderRadius: 'var(--radius)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    minHeight: 380,
+                                }}
+                            >
+                                {/* Day Column Header */}
+                                <div
+                                    style={{
+                                        padding: '10px 8px',
+                                        borderBottom: '1px solid var(--border)',
+                                        textAlign: 'center',
+                                        background: day.isToday ? 'rgba(47, 129, 247, 0.15)' : '#161b22',
+                                        borderTopLeftRadius: 'var(--radius)',
+                                        borderTopRightRadius: 'var(--radius)',
+                                    }}
+                                >
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase' }}>
+                                        {day.dayName}
+                                    </div>
+                                    <div
+                                        style={{
+                                            fontSize: 18,
+                                            fontWeight: 700,
+                                            color: day.isToday ? 'var(--accent)' : 'var(--text)',
+                                            margin: '2px 0',
+                                        }}
+                                    >
+                                        {day.dayNum}
+                                    </div>
+                                    <div
+                                        style={{
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                            color: day.totalMinutes > 0 ? 'var(--success)' : 'var(--muted)',
+                                        }}
+                                    >
+                                        {formatHours(day.totalMinutes)}
+                                    </div>
+                                </div>
+
+                                {/* Day Cards Body */}
+                                <div style={{ padding: 8, flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {day.entries.map((entry) => (
+                                        <div
+                                            key={entry.id}
+                                            style={{
+                                                background: '#1a212d',
+                                                border: '1px solid var(--border)',
+                                                borderRadius: 6,
+                                                padding: '8px 10px',
+                                                fontSize: 12,
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                    color: 'var(--accent)',
+                                                    marginBottom: 3,
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.02em',
+                                                }}
+                                            >
+                                                {entry.project_name.split(' - ')[0]}
+                                            </div>
+                                            <div style={{ fontWeight: 600, marginBottom: 4, lineHeight: 1.3 }}>
+                                                {entry.task_title}
+                                            </div>
+                                            <div
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    marginTop: 6,
+                                                    fontSize: 11,
+                                                }}
+                                            >
+                                                <strong>{formatHours(entry.duration_minutes)}</strong>
+                                                <button
+                                                    onClick={() => handleDelete(entry.id)}
+                                                    style={{
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        color: 'var(--danger)',
+                                                        cursor: 'pointer',
+                                                        padding: 0,
+                                                        fontSize: 11,
+                                                    }}
+                                                    title="Delete entry"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {/* Quick Log Button on Day Column */}
+                                    <button
+                                        className="btn btn-ghost btn-sm"
+                                        style={{
+                                            marginTop: 'auto',
+                                            width: '100%',
+                                            borderStyle: 'dashed',
+                                            fontSize: 11,
+                                            padding: '4px',
+                                        }}
+                                        onClick={() => handleOpenLogForDate(day.dateStr)}
+                                    >
+                                        + Log
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Modal Dialog for Logging Time */}
             {isModalOpen && (

@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/useAuth';
 import { authApi } from '@/features/auth/api';
+import { NotificationCenter } from '@/features/notifications/NotificationCenter';
 
 const NAV: { to: string; label: string; anyRole?: string[] }[] = [
     { to: '/today', label: 'Today' },
@@ -32,7 +33,10 @@ export function AppShell() {
     return (
         <div className="app-shell">
             <aside className="sidebar">
-                <div className="sidebar-brand">Timesheet</div>
+                <div className="sidebar-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>Timesheet</span>
+                    <NotificationCenter />
+                </div>
 
                 <nav className="sidebar-nav">
                     {visible.map((item) => (
