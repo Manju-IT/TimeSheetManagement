@@ -8,6 +8,9 @@ import { AdminLandingPage } from '@/features/admin/AdminLandingPage';
 import { TeamPage } from '@/features/team/TeamPage';
 import { ApprovalsPage } from '@/features/approvals/ApprovalsPage';
 import { LocationHistoryPage } from '@/features/attendance/LocationHistoryPage';
+import { TimesheetPage } from '@/features/timesheet/TimesheetPage';
+import { TasksPage } from '@/features/tasks/TasksPage';
+import { ReportsPage } from '@/features/reports/ReportsPage';
 
 export function AppRoutes() {
     return (
@@ -17,9 +20,9 @@ export function AppRoutes() {
                 <Route element={<AppShell />}>
                     <Route path="/" element={<Navigate to="/today" replace />} />
                     <Route path="/today" element={<TodayPage />} />
-                    <Route path="/timesheet" element={<Placeholder name="My Timesheet" />} />
-                    <Route path="/tasks" element={<Placeholder name="Tasks" />} />
-                    <Route path="/reports" element={<Placeholder name="Reports" />} />
+                    <Route path="/timesheet" element={<TimesheetPage />} />
+                    <Route path="/tasks" element={<TasksPage />} />
+                    <Route path="/reports" element={<ReportsPage />} />
                     <Route path="/location-history" element={<LocationHistoryPage />} />
                     <Route
                         path="/team"
@@ -49,16 +52,5 @@ export function AppRoutes() {
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-    );
-}
-
-function Placeholder({ name }: { name: string }) {
-    return (
-        <div className="page">
-            <header className="page-header">
-                <h1>{name}</h1>
-            </header>
-            <div className="card">Coming in a later phase.</div>
-        </div>
     );
 }

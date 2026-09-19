@@ -52,7 +52,7 @@ export interface CheckInResult {
 export interface CheckOutResult {
     attendance_day: AttendanceDay | null;
     work_session: WorkSession | null;
-    logout_event: GeoEvenat | null;
+    logout_event: GeoEvent | null;
     is_duplicate: boolean;
 }
 

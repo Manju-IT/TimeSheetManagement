@@ -69,7 +69,6 @@ export function CheckInCard() {
     const attendance = data?.attendance_day;
     const active = data?.active_session;
     const first = data?.first_login_event;
-    const last = data?.last_logout_event;
 
     const place =
         first?.place_label ??
