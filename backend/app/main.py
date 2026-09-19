@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import ORJSONResponse, RedirectResponse
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
@@ -105,6 +105,16 @@ async def validation_handler(_: Request, exc: RequestValidationError):  # noqa: 
             }
         },
     )
+
+
+@app.get("/")
+async def root() -> RedirectResponse:
+    return RedirectResponse(url="/api/docs")
+
+
+@app.get("/docs")
+async def docs_alias() -> RedirectResponse:
+    return RedirectResponse(url="/api/docs")
 
 
 @app.get("/healthz")
