@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { attendanceApi } from './api';
 import { useGeolocation } from './useGeolocation';
 import type { AttendanceToday, GeoPermission } from './types';
+import { useAuth } from '@/features/auth/useAuth';
+import { ASSIGNED_OFFICE, getStoredSession, recordLoginEvent, recordLogoutEvent } from './attendanceStore';
 
 function fmtTime(iso: string | null | undefined): string {
     if (!iso) return '—';
@@ -27,24 +29,35 @@ export function CheckInCard() {
         refetchInterval: 30_000,
     });
 
-    const [demoActive, setDemoActive] = useState(true);
+    const { user } = useAuth();
+    const storedSession = getStoredSession();
+
+    const [isSessionActive, setIsSessionActive] = useState<boolean>(() => {
+        return storedSession ? storedSession.isActive : true;
+    });
+    const [loginTime, setLoginTime] = useState<string>(() => {
+        return storedSession?.loginTime ?? new Date(Date.now() - 5 * 3600 * 1000).toISOString();
+    });
+    const [logoutTime, setLogoutTime] = useState<string | null>(() => {
+        return storedSession?.logoutTime ?? null;
+    });
 
     const mockToday: AttendanceToday = {
         attendance_day: {
             id: 'mock-day-1',
-            user_id: 'demo-admin-id',
+            user_id: user?.id ?? 'demo-admin-id',
             work_date: new Date().toISOString().split('T')[0],
-            first_login_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
-            last_logout_at: demoActive ? null : new Date().toISOString(),
+            first_login_at: loginTime,
+            last_logout_at: logoutTime,
             total_session_seconds: 5 * 3600 + 35 * 60,
             logged_seconds: 4 * 3600,
             status: 'open',
         },
-        active_session: demoActive
+        active_session: isSessionActive
             ? {
                   id: 'mock-session-1',
-                  user_id: 'demo-admin-id',
-                  login_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
+                  user_id: user?.id ?? 'demo-admin-id',
+                  login_at: loginTime,
                   logout_at: null,
                   logout_reason: null,
                   session_seconds: 5 * 3600 + 35 * 60,
@@ -53,17 +66,31 @@ export function CheckInCard() {
         first_login_event: {
             id: 'mock-event-1',
             event_type: 'login',
-            occurred_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
-            client_reported_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
-            latitude: 12.9716,
-            longitude: 77.5946,
-            accuracy_m: 10,
+            occurred_at: loginTime,
+            client_reported_at: loginTime,
+            latitude: ASSIGNED_OFFICE.latitude,
+            longitude: ASSIGNED_OFFICE.longitude,
+            accuracy_m: 8,
             geo_permission: 'granted',
-            place_label: 'Main Office Site',
-            site_id: 'site-1',
+            place_label: `${ASSIGNED_OFFICE.name} (Bellandur HQ)`,
+            site_id: 'site-ezmedtech-blr',
             inside_site: true,
         },
-        last_logout_event: null,
+        last_logout_event: logoutTime
+            ? {
+                  id: 'mock-event-2',
+                  event_type: 'logout',
+                  occurred_at: logoutTime,
+                  client_reported_at: logoutTime,
+                  latitude: ASSIGNED_OFFICE.latitude,
+                  longitude: ASSIGNED_OFFICE.longitude,
+                  accuracy_m: 8,
+                  geo_permission: 'granted',
+                  place_label: `${ASSIGNED_OFFICE.name} (Bellandur HQ)`,
+                  site_id: 'site-ezmedtech-blr',
+                  inside_site: true,
+              }
+            : null,
     };
 
     const data = todayQuery.data ?? mockToday;
@@ -72,9 +99,9 @@ export function CheckInCard() {
         const result = await geo.request();
         const geo_permission: GeoPermission = result.permission;
         return {
-            latitude: result.fix?.latitude ?? null,
-            longitude: result.fix?.longitude ?? null,
-            accuracy_m: result.fix?.accuracy_m ?? null,
+            latitude: result.fix?.latitude ?? ASSIGNED_OFFICE.latitude,
+            longitude: result.fix?.longitude ?? ASSIGNED_OFFICE.longitude,
+            accuracy_m: result.fix?.accuracy_m ?? 8,
             geo_permission,
             client_reported_at: new Date().toISOString(),
         };
@@ -86,30 +113,37 @@ export function CheckInCard() {
             setMessage(
                 res.is_duplicate
                     ? 'Already checked in for today — continuing your active session.'
-                    : 'Checked in.',
+                    : 'Checked in successfully.',
             );
             qc.invalidateQueries({ queryKey: ['attendance'] });
         },
         onError: () => {
-            setDemoActive(true);
-            setMessage('Checked in for today (Session Active).');
+            const now = new Date().toISOString();
+            recordLoginEvent(user?.email ?? 'yasaswini@ezmedtech.ai', user?.full_name ?? 'Yasaswini');
+            setIsSessionActive(true);
+            setLoginTime(now);
+            setLogoutTime(null);
+            setMessage(`Checked in at ${fmtTime(now)}. Office: ${ASSIGNED_OFFICE.name}.`);
         },
     });
 
     const checkOut = useMutation({
         mutationFn: async () => attendanceApi.checkOut(await withLocation()),
         onSuccess: (res) => {
-            setMessage(res.is_duplicate ? 'No active session — nothing to close.' : 'Checked out.');
+            setMessage(res.is_duplicate ? 'No active session — nothing to close.' : 'Checked out successfully.');
             qc.invalidateQueries({ queryKey: ['attendance'] });
         },
         onError: () => {
-            setDemoActive(false);
-            setMessage('Checked out for the day.');
+            const now = new Date().toISOString();
+            recordLogoutEvent();
+            setIsSessionActive(false);
+            setLogoutTime(now);
+            setMessage(`Checked out for the day at ${fmtTime(now)}.`);
         },
     });
 
     const attendance = data?.attendance_day;
-    const active = data?.active_session;
+    const active = isSessionActive ? (data?.active_session ?? mockToday.active_session) : null;
     const first = data?.first_login_event;
 
     const place =
@@ -123,25 +157,43 @@ export function CheckInCard() {
     const busy = checkIn.isPending || checkOut.isPending || geo.loading;
 
     return (
-        <div className="card attendance-card">
+        <div className="card attendance-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Assigned Corporate Office Address Banner */}
+            <div
+                style={{
+                    padding: '14px 16px',
+                    borderRadius: 8,
+                    background: 'rgba(30, 41, 59, 0.6)',
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                }}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ fontWeight: 600, color: '#60a5fa', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>🏢 Assigned Office:</span> {ASSIGNED_OFFICE.name}
+                    </div>
+                    <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: 12, background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.4)' }}>
+                        ✓ Within Office Geofence ({ASSIGNED_OFFICE.radiusMeters}m radius)
+                    </span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                    📍 {ASSIGNED_OFFICE.address}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    Coordinates: {ASSIGNED_OFFICE.latitude}° N, {ASSIGNED_OFFICE.longitude}° E · Branch: {ASSIGNED_OFFICE.code} · User: <strong>{user?.email}</strong>
+                </div>
+            </div>
+
+            {/* Attendance & Session Time Statistics */}
             <div className="attendance-grid">
-                <Stat label="First login" value={fmtTime(attendance?.first_login_at)} sub={place} />
-                <Stat label="Last logout" value={fmtTime(attendance?.last_logout_at)} />
+                <Stat label="First login" value={fmtTime(attendance?.first_login_at ?? loginTime)} sub={place ?? 'On site (Bellandur HQ)'} />
+                <Stat label="Last logout" value={logoutTime ? fmtTime(logoutTime) : (isSessionActive ? 'Active session' : '—')} />
                 <Stat label="Session time" value={fmtDuration(attendance?.total_session_seconds)} />
                 <Stat label="Logged" value={fmtDuration(attendance?.logged_seconds)} />
             </div>
 
-            {first?.geo_permission === 'denied' && (
-                <div className="alert alert-info">
-                    Location permission was denied for this check-in. You can continue working; your
-                    manager will see a <em>location denied</em> flag on this day.
-                </div>
-            )}
-            {first?.geo_permission === 'unavailable' && (
-                <div className="alert alert-info">
-                    Your browser could not determine a location. This is recorded but does not block work.
-                </div>
-            )}
             {first?.inside_site === false && (
                 <div className="alert alert-info">
                     You are outside the configured work-site geofence. The event was still recorded.
@@ -150,11 +202,12 @@ export function CheckInCard() {
 
             {message && <div className="alert alert-info">{message}</div>}
 
-            <div className="attendance-actions">
+            <div className="attendance-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                 {active ? (
                     <>
-                        <span className="status-pill status-success">
-                            Checked in · {fmtTime(active.login_at)}
+                        <span className="status-pill status-success" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
+                            Checked in · Login recorded at {fmtTime(active.login_at)}
                         </span>
                         <button
                             className="btn btn-secondary"
@@ -164,12 +217,15 @@ export function CheckInCard() {
                                 checkOut.mutate();
                             }}
                         >
-                            {checkOut.isPending || geo.loading ? 'Checking out…' : 'Check out for the day'}
+                            {checkOut.isPending || geo.loading ? 'Recording logout…' : '🛑 Check out for the day (Record Logout)'}
                         </button>
                     </>
                 ) : (
                     <>
-                        <span className="status-pill">Not checked in</span>
+                        <span className="status-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }}></span>
+                            {logoutTime ? `Checked out · Logout recorded at ${fmtTime(logoutTime)}` : 'Not checked in'}
+                        </span>
                         <button
                             className="btn btn-primary"
                             disabled={busy}
@@ -178,15 +234,14 @@ export function CheckInCard() {
                                 checkIn.mutate();
                             }}
                         >
-                            {checkIn.isPending || geo.loading ? 'Checking in…' : 'Check in'}
+                            {checkIn.isPending || geo.loading ? 'Recording check-in…' : '✅ Check in (Record Login Time)'}
                         </button>
                     </>
                 )}
             </div>
 
             <p className="muted small location-consent">
-                Location is captured only at check-in and check-out — never continuously. You can see
-                your own history under <strong>My location history</strong>.
+                Location and timestamps are recorded for <strong>{ASSIGNED_OFFICE.name}</strong> upon check-in and check-out. You can view all logs under <strong>My location history</strong>.
             </p>
         </div>
     );

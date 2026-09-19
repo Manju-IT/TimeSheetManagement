@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.exceptions import Unauthenticated
+from app.core.exceptions import Unauthenticated, ValidationError
 from app.core.logging import get_logger
 from app.core.permissions import CurrentUser, permissions_for
 from app.schemas.auth import (
@@ -109,9 +109,13 @@ async def dev_login(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> Response:
+    email_str = str(payload.email).lower()
+    if not email_str.endswith("@ezmedtech.ai"):
+        raise ValidationError("Access restricted: Only @ezmedtech.ai corporate emails are allowed.")
+
     issued = await auth_service.dev_login(
         db,
-        email=str(payload.email),
+        email=email_str,
         ip=_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )

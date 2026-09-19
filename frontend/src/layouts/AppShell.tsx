@@ -14,6 +14,8 @@ const NAV: { to: string; label: string; anyRole?: string[] }[] = [
     { to: '/admin', label: 'Admin', anyRole: ['admin'] },
 ];
 
+import { recordLogoutEvent } from '@/features/attendance/attendanceStore';
+
 export function AppShell() {
     const { user, setUser } = useAuth();
     const nav = useNavigate();
@@ -25,7 +27,12 @@ export function AppShell() {
     );
 
     async function onLogout() {
-        await authApi.logout();
+        recordLogoutEvent();
+        try {
+            await authApi.logout();
+        } catch {
+            // ignore
+        }
         setUser(null);
         nav('/login', { replace: true });
     }
