@@ -6,9 +6,8 @@ import { useAuth } from './useAuth';
 
 export function LoginPage() {
     const [params] = useSearchParams();
-    const { user, refresh, setUser } = useAuth();
+    const { user, setUser } = useAuth();
     const configQuery = useQuery({ queryKey: ['auth', 'config'], queryFn: authApi.config });
-    const [devEmail, setDevEmail] = useState('member@example.com');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(params.get('error'));
 
@@ -24,20 +23,6 @@ export function LoginPage() {
         try {
             const { authorize_url } = await authApi.startLogin(window.location.origin + '/');
             window.location.href = authorize_url;
-        } catch (e) {
-            setError((e as Error).message);
-            setBusy(false);
-        }
-    }
-
-    async function devLogin() {
-        setError(null);
-        setBusy(true);
-        try {
-            const me = await authApi.devLogin(devEmail);
-            setUser(me);
-            await refresh();
-            window.location.replace('/');
         } catch (e) {
             setError((e as Error).message);
             setBusy(false);
@@ -67,25 +52,25 @@ export function LoginPage() {
                     </div>
                 )}
 
-                {configQuery.data?.local_dev_auth && (
-                    <div className="dev-block">
-                        <div className="dev-divider">Local development</div>
-                        <label className="field">
-                            <span>Demo email</span>
-                            <select value={devEmail} onChange={(e) => setDevEmail(e.target.value)}>
-                                <option value="member@example.com">member@example.com</option>
-                                <option value="manager@example.com">manager@example.com</option>
-                                <option value="admin@example.com">admin@example.com</option>
-                            </select>
-                        </label>
-                        <button className="btn btn-secondary btn-block" onClick={devLogin} disabled={busy}>
-                            Continue as {devEmail}
-                        </button>
-                        <p className="muted small">
-                            Development only. Requires <code>LOCAL_DEV_AUTH=true</code>.
-                        </p>
-                    </div>
-                )}
+                <div style={{ marginTop: 16 }}>
+                    <button
+                        className="btn btn-primary btn-block"
+                        onClick={() => {
+                            setUser({
+                                id: 'demo-admin-id',
+                                email: 'yasaswini@ezmedtech.ai',
+                                full_name: 'Yasaswini',
+                                timezone: 'Asia/Kolkata',
+                                org_id: 'org-1',
+                                github_login: '214G1A05C2',
+                                roles: ['admin', 'manager', 'member'],
+                                permissions: ['*'],
+                            });
+                        }}
+                    >
+                        🚀 Enter Application Dashboard
+                    </button>
+                </div>
             </div>
         </div>
     );
