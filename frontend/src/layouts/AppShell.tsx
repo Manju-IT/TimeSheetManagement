@@ -40,9 +40,8 @@ export function AppShell() {
     return (
         <div className="app-shell">
             <aside className="sidebar">
-                <div className="sidebar-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>Timesheet</span>
-                    <NotificationCenter />
+                <div className="sidebar-brand" style={{ fontWeight: 700, fontSize: '1rem', color: '#60a5fa' }}>
+                    ⚡ EZMedTech AI
                 </div>
 
                 <nav className="sidebar-nav">
@@ -85,8 +84,50 @@ export function AppShell() {
                 </div>
             </aside>
 
-            <main className="content">
-                <Outlet />
+            <main className="content" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', padding: 0 }}>
+                <header
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 28px',
+                        borderBottom: '1px solid var(--border)',
+                        background: 'rgba(15, 23, 42, 0.5)',
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 100,
+                        backdropFilter: 'blur(8px)',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
+                            🏢 <strong>EZMedTech Headquarters</strong> (Bellandur)
+                        </span>
+                        <span
+                            style={{
+                                fontSize: '0.75rem',
+                                padding: '2px 8px',
+                                borderRadius: 12,
+                                background: 'rgba(16, 185, 129, 0.2)',
+                                color: '#10b981',
+                                border: '1px solid rgba(16, 185, 129, 0.4)',
+                            }}
+                        >
+                            ✓ On-Site Verified
+                        </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <span className="muted small">
+                            {new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                        <NotificationCenter align="right" />
+                    </div>
+                </header>
+
+                <div style={{ flex: 1, padding: '24px 28px' }}>
+                    <Outlet />
+                </div>
             </main>
         </div>
     );

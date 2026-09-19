@@ -9,7 +9,7 @@ export interface NotificationItem {
     read: boolean;
 }
 
-export function NotificationCenter() {
+export function NotificationCenter({ align = 'right' }: { align?: 'left' | 'right' }) {
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState<NotificationItem[]>([
         {
@@ -83,11 +83,14 @@ export function NotificationCenter() {
                 onClick={() => setIsOpen(!isOpen)}
                 style={{
                     position: 'relative',
-                    padding: '6px 10px',
+                    padding: '6px 12px',
                     fontSize: 14,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
+                    background: isOpen ? 'rgba(255, 255, 255, 0.1)' : undefined,
+                    borderRadius: 6,
+                    cursor: 'pointer',
                 }}
                 title="Notifications and Reminders"
             >
@@ -96,7 +99,7 @@ export function NotificationCenter() {
                 {unreadCount > 0 && (
                     <span
                         style={{
-                            background: 'var(--danger)',
+                            background: '#ef4444',
                             color: '#fff',
                             fontSize: 10,
                             fontWeight: 700,
@@ -116,15 +119,17 @@ export function NotificationCenter() {
                     className="card"
                     style={{
                         position: 'absolute',
-                        right: 0,
+                        right: align === 'right' ? 0 : 'auto',
+                        left: align === 'left' ? 0 : 'auto',
                         top: 'calc(100% + 8px)',
                         width: 360,
+                        maxWidth: 'calc(100vw - 32px)',
                         maxHeight: 460,
                         overflowY: 'auto',
-                        zIndex: 1000,
-                        boxShadow: '0 12px 36px rgba(0, 0, 0, 0.6)',
+                        zIndex: 2000,
+                        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.7)',
                         padding: 0,
-                        border: '1px solid var(--border)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
                     }}
                 >
                     <div
