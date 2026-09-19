@@ -2,7 +2,6 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1 import (
-    admin,
     approvals,
     attendance,
     auth,
@@ -11,6 +10,7 @@ from app.api.v1 import (
     teams,
     time_entries,
 )
+from app.api.v1.admin.router import router as admin_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(auth.router)
@@ -20,4 +20,4 @@ api_v1_router.include_router(tasks.router)
 api_v1_router.include_router(projects.router)
 api_v1_router.include_router(approvals.router)
 api_v1_router.include_router(teams.router)
-api_v1_router.include_router(admin.router.router)
+api_v1_router.include_router(admin_router)
