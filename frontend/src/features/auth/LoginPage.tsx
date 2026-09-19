@@ -1,21 +1,16 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { authApi } from './api';
 import { useAuth } from './useAuth';
 
 export function LoginPage() {
+    const navigate = useNavigate();
     const [params] = useSearchParams();
-    const { user, setUser } = useAuth();
+    const { setUser } = useAuth();
     const configQuery = useQuery({ queryKey: ['auth', 'config'], queryFn: authApi.config });
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(params.get('error'));
-
-    useEffect(() => {
-        if (user) {
-            window.location.replace('/');
-        }
-    }, [user]);
 
     async function startSso() {
         setError(null);
@@ -66,6 +61,7 @@ export function LoginPage() {
                                 roles: ['admin', 'manager', 'member'],
                                 permissions: ['*'],
                             });
+                            navigate('/timesheet');
                         }}
                     >
                         🚀 Enter Application Dashboard

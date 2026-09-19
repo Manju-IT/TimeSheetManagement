@@ -18,7 +18,7 @@ export function AppRoutes() {
             <Route path="/login" element={<LoginPage />} />
             <Route element={<ProtectedRoute />}>
                 <Route element={<AppShell />}>
-                    <Route path="/" element={<Navigate to="/today" replace />} />
+                    <Route path="/" element={<Navigate to="/timesheet" replace />} />
                     <Route path="/today" element={<TodayPage />} />
                     <Route path="/timesheet" element={<TimesheetPage />} />
                     <Route path="/tasks" element={<TasksPage />} />
