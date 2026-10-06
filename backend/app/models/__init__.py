@@ -37,6 +37,7 @@ __all__ = [
     "CodeLink",
     "TimesheetPeriod",
     "SyncLog",
+    "SSOConfig",
     "AuditLog",
     "IdempotencyKey",
     "UserSession",

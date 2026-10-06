@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import or_
 
 from app.api.dependencies.auth import require_admin
 from app.api.dependencies.pagination import Pagination, pagination_params
@@ -64,12 +65,12 @@ async def list_users(
     count_stmt = select(func.count(AppUser.id))
     if q:
         like = f"%{q.lower()}%"
-        base = base.where(
-            func.lower(AppUser.email).like(like) | func.lower(AppUser.full_name).like(like)
+        cond = or_(
+            func.lower(AppUser.email).like(like),
+            func.lower(AppUser.full_name).like(like),
         )
-        count_stmt = count_stmt.where(
-            func.lower(AppUser.email).like(like) | func.lower(AppUser.full_name).like(like)
-        )
+        base = base.where(cond)
+        count_stmt = count_stmt.where(cond)
     if status is not None:
         base = base.where(AppUser.status == status)
         count_stmt = count_stmt.where(AppUser.status == status)
@@ -78,7 +79,7 @@ async def list_users(
     users = list(
         (
             await db.execute(
-                base.order_by(AppUser.email.asc())
+                base.order_by(AppUser.full_name.asc(), AppUser.email.asc())
                 .offset(pagination.offset)
                 .limit(pagination.limit)
             )

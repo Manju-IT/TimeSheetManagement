@@ -40,18 +40,28 @@ class SessionClaims:
     expires_at: datetime
 
 
-def issue_session_token(user_id: uuid.UUID, session_id: uuid.UUID) -> tuple[str, datetime]:
+def issue_session_token(
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> tuple[str, datetime]:
     now = datetime.now(timezone.utc)
     exp = now + timedelta(seconds=settings.SESSION_TTL_SECONDS)
+
     payload = {
-        "iss": settings.BACKEND_URL,
+        "iss": str(settings.BACKEND_URL),
         "aud": settings.APP_NAME,
         "sub": str(user_id),
         "sid": str(session_id),
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp()),
     }
-    token = jwt.encode(payload, settings.SESSION_SECRET, algorithm=JWT_ALG)
+
+    token = jwt.encode(
+        payload,
+        settings.SESSION_SECRET.get_secret_value(),
+        algorithm=JWT_ALG,
+    )
+
     return token, exp
 
 
@@ -59,11 +69,20 @@ def decode_session_token(token: str) -> SessionClaims:
     try:
         payload = jwt.decode(
             token,
-            settings.SESSION_SECRET,
+            settings.SESSION_SECRET.get_secret_value(),
             algorithms=[JWT_ALG],
             audience=settings.APP_NAME,
-            issuer=settings.BACKEND_URL,
-            options={"require": ["exp", "iat", "sub", "sid", "iss", "aud"]},
+            issuer=str(settings.BACKEND_URL),
+            options={
+                "require": [
+                    "exp",
+                    "iat",
+                    "sub",
+                    "sid",
+                    "iss",
+                    "aud",
+                ]
+            },
         )
     except jwt.ExpiredSignatureError as e:
         raise Unauthenticated("Session expired") from e
@@ -79,10 +98,15 @@ def decode_session_token(token: str) -> SessionClaims:
     return SessionClaims(
         user_id=user_id,
         session_id=session_id,
-        issued_at=datetime.fromtimestamp(payload["iat"], tz=timezone.utc),
-        expires_at=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
+        issued_at=datetime.fromtimestamp(
+            payload["iat"],
+            tz=timezone.utc,
+        ),
+        expires_at=datetime.fromtimestamp(
+            payload["exp"],
+            tz=timezone.utc,
+        ),
     )
-
 
 def constant_time_compare(a: str, b: str) -> bool:
     return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))

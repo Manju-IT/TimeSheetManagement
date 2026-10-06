@@ -1,12 +1,11 @@
 from __future__ import annotations
-
 import uuid
+
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Numeric, Text
 from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import Mapped, mapped_column
-
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 from app.models.enums import GeoEventType, GeoPermission
 
@@ -16,7 +15,7 @@ class GeoEvent(UUIDPKMixin, TimestampMixin, Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("app_user.id", ondelete="CASCADE"),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
         nullable=False,
     )
     event_type: Mapped[GeoEventType] = mapped_column(
@@ -39,6 +38,10 @@ class GeoEvent(UUIDPKMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("work_site.id", ondelete="SET NULL"), nullable=True
     )
     inside_site: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    distance_to_site_m: Mapped[float | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+    )
     ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
     device_id: Mapped[str | None] = mapped_column(Text, nullable=True)

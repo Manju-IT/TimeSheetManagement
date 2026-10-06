@@ -27,3 +27,5 @@ python-dateutil==2.9.0.post0
 asyncpg
 
 pydantic[email]
+
+openpyxl==3.1.5

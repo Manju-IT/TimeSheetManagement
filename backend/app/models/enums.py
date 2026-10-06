@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import enum
 
-
+class SyncStatus(str, enum.Enum):
+    pending = "pending"
+    running = "running"
+    succeeded = "succeeded"
+    failed = "failed"
+    
 class UserStatus(str, enum.Enum):
     active = "active"
     disabled = "disabled"
@@ -57,13 +62,6 @@ class GhContentType(str, enum.Enum):
     draft = "draft"
 
 
-class SyncState(str, enum.Enum):
-    synced = "synced"
-    pending_push = "pending_push"
-    conflict = "conflict"
-    error = "error"
-
-
 class TimeEntryStatus(str, enum.Enum):
     draft = "draft"
     submitted = "submitted"
@@ -104,8 +102,9 @@ class SyncTrigger(str, enum.Enum):
     user_edit = "user_edit"
 
 
-class SyncStatus(str, enum.Enum):
-    success = "success"
-    failed = "failed"
-    skipped = "skipped"
+class SyncState(str, enum.Enum):
+    synced = "synced"
+    pending_push = "pending_push"
+    syncing = "syncing"
     conflict = "conflict"
+    error = "error"

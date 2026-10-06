@@ -20,6 +20,8 @@ from app.models.user import AppUser
 from app.models.work_session import WorkSession
 from app.services import audit_service, location_service, session_service
 from app.utils.timezone import work_date_for
+from app.core.locks import acquire_advisory_locks
+from app.core.state_machines import ATTENDANCE_DAY_TRANSITIONS, assert_transition
 
 log = get_logger("app.attendance_service")
 
@@ -53,16 +55,18 @@ def work_date_window_utc(
 # Locking — serializes attendance mutations per user
 # --------------------------------------------------------------------------- #
 
-async def _acquire_user_lock(db: AsyncSession, user_id: uuid.UUID) -> None:
-    """Transaction-scoped PostgreSQL advisory lock keyed by user id.
+# async def _acquire_user_lock(db: AsyncSession, user_id: uuid.UUID) -> None:
+#     """Transaction-scoped PostgreSQL advisory lock keyed by user id.
 
-    Prevents concurrent check-in/check-out/recompute from racing on the same
-    attendance_day row. Released automatically at COMMIT/ROLLBACK.
-    """
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtext(:k)::bigint)"),
-        {"k": f"attendance:{user_id}"},
-    )
+#     Prevents concurrent check-in/check-out/recompute from racing on the same
+#     attendance_day row. Released automatically at COMMIT/ROLLBACK.
+#     """
+#     await db.execute(
+#         text("SELECT pg_advisory_xact_lock(hashtext(:k)::bigint)"),
+#         {"k": f"attendance:{user_id}"},
+#     )
+async def _acquire_user_lock(db: AsyncSession, user_id: uuid.UUID) -> None:
+    await acquire_advisory_locks(db, f"attendance:{user_id}")
 
 
 # --------------------------------------------------------------------------- #
@@ -140,17 +144,23 @@ async def _create_geo_event(
     user_agent: str | None,
     occurred_at: datetime,
 ) -> GeoEvent:
+
     location_service.validate_coordinates(
-        payload.latitude, payload.longitude, payload.accuracy_m
+        payload.latitude,
+        payload.longitude,
+        payload.accuracy_m,
     )
-    site, inside = await location_service.match_work_site(
+
+    site, inside, distance_m = await location_service.match_work_site(
         db,
         org_id=user.org_id,
         latitude=payload.latitude,
         longitude=payload.longitude,
     )
+
     place_label = await location_service.resolve_place_label(
-        payload.latitude, payload.longitude
+        payload.latitude,
+        payload.longitude,
     )
 
     event = GeoEvent(
@@ -158,19 +168,27 @@ async def _create_geo_event(
         event_type=event_type,
         occurred_at=occurred_at,
         client_reported_at=payload.client_reported_at,
+
         latitude=payload.latitude,
         longitude=payload.longitude,
         accuracy_m=payload.accuracy_m,
+
         geo_permission=payload.geo_permission,
+
         place_label=place_label,
+
         site_id=site.id if site is not None else None,
         inside_site=inside,
+        distance_to_site_m=distance_m,
+
         ip_address=ip,
         user_agent=(user_agent or "")[:500] or None,
         device_id=payload.device_id,
     )
+
     db.add(event)
     await db.flush()
+
     return event
 
 
@@ -298,8 +316,43 @@ async def check_in(
         )
         if prev_day is not None:
             await _recompute_totals(db, user=user, org=org, attendance=prev_day)
+
             if prev_day.status == AttendanceStatus.open:
+                assert_transition(
+                    ATTENDANCE_DAY_TRANSITIONS,
+                    prev_day.status.value,
+                    AttendanceStatus.closed.value,
+                    entity="attendance_day",
+                    details={"reason": "stale_session"},
+                )
+
                 prev_day.status = AttendanceStatus.closed
+
+                await audit_service.record(
+                    db,
+                    actor_user_id=user.id,
+                    action="attendance.close",
+                    entity="attendance_day",
+                    entity_id=prev_day.id,
+                    after={"status": "closed", "reason": "stale_session"},
+                    ip=ip,
+                )
+
+    # A completed attendance day cannot be reopened by another check-in.
+    # This check is intentionally performed before creating a GeoEvent or
+    # WorkSession so a rejected request leaves no partial attendance records.
+    attendance = await _get_attendance_day(
+        db, user.id, work_date, for_update=True
+    )
+    if attendance is not None and attendance.last_logout_at is not None:
+        raise Conflict(
+            "You have already checked out for this workday. "
+            "Check-in is not allowed again until the next workday.",
+            details={
+                "code": "ATTENDANCE_ALREADY_COMPLETED",
+                "work_date": work_date.isoformat(),
+            },
+        )
 
     # Fresh login for this work_date.
     login_event = await _create_geo_event(
@@ -331,14 +384,38 @@ async def check_in(
     else:
         if attendance.status == AttendanceStatus.approved:
             raise Conflict("This workday is already approved and cannot be reopened")
-        # RULE: first_login_at is set-once. Never overwritten by later logins.
+
         if attendance.first_login_at is None:
             attendance.first_login_at = now
             attendance.first_login_event_id = login_event.id
-        # A closed day reopens when work resumes; a submitted day stays submitted
-        # until the approval workflow says otherwise.
+
         if attendance.status == AttendanceStatus.closed:
+            assert_transition(
+                ATTENDANCE_DAY_TRANSITIONS,
+                attendance.status.value,
+                AttendanceStatus.open.value,
+                entity="attendance_day",
+                details={"reason": "user_resumed_work"},
+            )
+
             attendance.status = AttendanceStatus.open
+
+            await audit_service.record(
+                db,
+                actor_user_id=user.id,
+                action="attendance.reopen",
+                entity="attendance_day",
+                entity_id=attendance.id,
+                after={"status": "open", "reason": "user_resumed_work"},
+                ip=ip,
+            )
+
+        elif attendance.status == AttendanceStatus.rejected:
+            raise Conflict(
+                "This workday was rejected by a manager; correct the entries and submit "
+                "a new timesheet for the week."
+            )
+
         await db.flush()
 
     await _recompute_totals(db, user=user, org=org, attendance=attendance)
@@ -441,7 +518,49 @@ async def check_out(
         attendance.last_logout_at = now
         attendance.last_logout_event_id = logout_event.id
 
-    await _recompute_totals(db, user=user, org=org, attendance=attendance)
+        await _recompute_totals(
+        db,
+        user=user,
+        org=org,
+        attendance=attendance,
+    )
+
+    # A successful checkout completes the attendance day.
+    # Do not leave it in `open`, or timesheet submission will reject it.
+    if attendance.status == AttendanceStatus.open:
+        assert_transition(
+            ATTENDANCE_DAY_TRANSITIONS,
+            attendance.status.value,
+            AttendanceStatus.closed.value,
+            entity="attendance_day",
+            details={"reason": "user_checkout"},
+        )
+
+        previous_status = attendance.status
+        attendance.status = AttendanceStatus.closed
+
+        await audit_service.record(
+            db,
+            actor_user_id=user.id,
+            action="attendance.close",
+            entity="attendance_day",
+            entity_id=attendance.id,
+            before={
+                "status": previous_status.value,
+            },
+            after={
+                "status": AttendanceStatus.closed.value,
+                "reason": "user_checkout",
+                "last_logout_at": (
+                    attendance.last_logout_at.isoformat()
+                    if attendance.last_logout_at
+                    else None
+                ),
+            },
+            ip=ip,
+        )
+
+    await db.flush()
 
     await audit_service.record(
         db,
@@ -534,3 +653,45 @@ async def recompute_range(
             count += 1
         d = d + timedelta(days=1)
     return count
+
+async def transition_day(
+    db: AsyncSession,
+    *,
+    actor_id: uuid.UUID,
+    attendance_id: uuid.UUID,
+    target: AttendanceStatus,
+    reason: str | None,
+    ip: str | None,
+) -> AttendanceDay:
+    attendance = (
+        await db.execute(
+            select(AttendanceDay)
+            .where(AttendanceDay.id == attendance_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if attendance is None:
+        raise NotFound("Attendance day not found")
+
+    assert_transition(
+        ATTENDANCE_DAY_TRANSITIONS,
+        attendance.status.value,
+        target.value,
+        entity="attendance_day",
+        details={"reason": reason} if reason else None,
+    )
+    before = attendance.status
+    attendance.status = target
+    await db.flush()
+
+    await audit_service.record(
+        db,
+        actor_user_id=actor_id,
+        action=f"attendance.{target.value}",
+        entity="attendance_day",
+        entity_id=attendance.id,
+        before={"status": before.value},
+        after={"status": target.value, "reason": reason},
+        ip=ip,
+    )
+    return attendance

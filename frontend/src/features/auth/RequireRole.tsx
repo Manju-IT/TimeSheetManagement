@@ -1,27 +1,19 @@
-import { Navigate, useLocation } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
+import { PermissionDenied } from '@/components/ui/ErrorState';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
-export function RequireRole({ roles, children }: { roles: string[]; children: ReactNode }) {
+export function RequireRole({ roles }: { roles: string[] }) {
     const { user, loading } = useAuth();
     const location = useLocation();
 
-    if (loading) return <div className="page-loading">Loading…</div>;
-    if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-
-    const allowed = roles.some((r) => user.roles.includes(r));
-    if (!allowed) {
-        return (
-            <div className="page">
-                <header className="page-header">
-                    <h1>Not available</h1>
-                </header>
-                <div className="card">
-                    You do not have permission to view this page. If you believe this is a mistake,
-                    contact an administrator.
-                </div>
-            </div>
-        );
+    if (loading) {
+        return <div className="page"><SkeletonTable rows={4} cols={3} /></div>;
     }
-    return <>{children}</>;
+    if (!user) {
+        return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    }
+    const allowed = roles.some((r) => user.roles.includes(r));
+    if (!allowed) return <PermissionDenied />;
+    return <Outlet />;
 }

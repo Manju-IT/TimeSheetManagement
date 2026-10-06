@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react';
 
-export type BrowserPermission = 'granted' | 'denied' | 'unavailable';
+export type BrowserPermission =
+    | 'granted'
+    | 'denied'
+    | 'unavailable';
 
 export interface GeoFix {
     latitude: number;
@@ -21,29 +24,100 @@ interface State {
     loading: boolean;
 }
 
-const initial: State = { permission: 'unknown', fix: null, error: null, loading: false };
+const initial: State = {
+    permission: 'unknown',
+    fix: null,
+    error: null,
+    loading: false,
+};
 
 /**
- * One-shot geolocation. Never watches, never polls.
- * Called only when the user explicitly performs check-in or check-out.
+ * One-shot geolocation.
+ *
+ * Never watches and never polls.
+ * Called only when the user explicitly performs
+ * check-in or check-out.
  */
 export function useGeolocation() {
     const [state, setState] = useState<State>(initial);
 
     const request = useCallback((): Promise<GeoResult> => {
-        if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-            const r: GeoResult = {
+        if (
+            typeof navigator === 'undefined' ||
+            !('geolocation' in navigator)
+        ) {
+            const result: GeoResult = {
                 fix: null,
                 permission: 'unavailable',
-                error: 'Geolocation is not supported by this browser.',
+                error:
+                    'Geolocation is not supported by this browser.',
             };
-            setState({ permission: 'unavailable', fix: null, error: r.error, loading: false });
-            return Promise.resolve(r);
+
+            setState({
+                permission: 'unavailable',
+                fix: null,
+                error: result.error,
+                loading: false,
+            });
+
+            return Promise.resolve(result);
         }
 
-        setState((s) => ({ ...s, loading: true, error: null }));
+        setState((current) => ({
+            ...current,
+            loading: true,
+            error: null,
+        }));
 
         return new Promise<GeoResult>((resolve) => {
+            /**
+             * Handle geolocation failures.
+             *
+             * When the application is running inside an iframe,
+             * browsers may report PERMISSION_DENIED without showing
+             * a normal permission prompt if the iframe does not have
+             * the required allow="geolocation" permission policy.
+             */
+            const err = (
+                posErr: GeolocationPositionError,
+            ) => {
+                const inIframe =
+                    typeof window !== 'undefined' &&
+                    window.self !== window.top;
+
+                const permission: BrowserPermission =
+                    posErr.code === posErr.PERMISSION_DENIED
+                        ? 'denied'
+                        : 'unavailable';
+
+                let message =
+                    posErr.message ||
+                    'Unable to determine location.';
+
+                if (
+                    permission === 'denied' &&
+                    inIframe
+                ) {
+                    message =
+                        'Location was denied. If this app is embedded, ' +
+                        'the parent page must include allow="geolocation" ' +
+                        'on the iframe tag.';
+                }
+
+                setState({
+                    permission,
+                    fix: null,
+                    error: message,
+                    loading: false,
+                });
+
+                resolve({
+                    fix: null,
+                    permission,
+                    error: message,
+                });
+            };
+
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
                     const fix: GeoFix = {
@@ -51,26 +125,37 @@ export function useGeolocation() {
                         longitude: pos.coords.longitude,
                         accuracy_m: pos.coords.accuracy,
                     };
-                    setState({ permission: 'granted', fix, error: null, loading: false });
-                    resolve({ fix, permission: 'granted', error: null });
-                },
-                (err) => {
-                    const permission: BrowserPermission =
-                        err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable';
+
                     setState({
-                        permission,
-                        fix: null,
-                        error: err.message || 'Unable to determine location.',
+                        permission: 'granted',
+                        fix,
+                        error: null,
                         loading: false,
                     });
-                    resolve({ fix: null, permission, error: err.message });
+
+                    resolve({
+                        fix,
+                        permission: 'granted',
+                        error: null,
+                    });
                 },
-                { enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 },
+                err,
+                {
+                    enableHighAccuracy: true,
+                    timeout: 12_000,
+                    maximumAge: 0,
+                },
             );
         });
     }, []);
 
-    const reset = useCallback(() => setState(initial), []);
+    const reset = useCallback(() => {
+        setState(initial);
+    }, []);
 
-    return { ...state, request, reset };
+    return {
+        ...state,
+        request,
+        reset,
+    };
 }

@@ -13,7 +13,7 @@ from sqlalchemy import (
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
@@ -65,6 +65,26 @@ class Task(UUIDPKMixin, TimestampMixin, Base):
         nullable=False,
         default=SyncState.synced,
     )
+    sync_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
+    sync_last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    sync_last_error_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    conflict_remote_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    conflict_detected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    conflict_local_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     project: Mapped["Project"] = relationship(back_populates="tasks")  # noqa: F821

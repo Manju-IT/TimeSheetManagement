@@ -22,12 +22,12 @@ class MeResponse(BaseModel):
     roles: list[str]
     permissions: list[str]
 
-
 class AuthConfigResponse(BaseModel):
     oidc_enabled: bool
     local_dev_auth: bool
     app_name: str
-
+    embedded: bool          
+    frame_ancestors: list[str]  
 
 class StartLoginResponse(BaseModel):
     authorize_url: str

@@ -18,11 +18,12 @@ async def record(
     before: dict[str, Any] | None = None,
     after: dict[str, Any] | None = None,
     ip: str | None = None,
+    org_id: uuid.UUID | None = None,
 ) -> None:
-    """Append an audit entry. Caller is responsible for the surrounding transaction."""
     db.add(
         AuditLog(
             actor_user_id=actor_user_id,
+            org_id=org_id,
             action=action,
             entity=entity,
             entity_id=entity_id,

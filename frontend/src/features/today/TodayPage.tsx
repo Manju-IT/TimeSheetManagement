@@ -1,20 +1,24 @@
 import { CheckInCard } from '@/features/attendance/CheckInCard';
+import { TodayEntriesList } from '@/features/time-entries/TodayEntriesList';
+import { PageHeader } from '@/layouts/PageHeader';
 import { useAuth } from '@/features/auth/useAuth';
 
 export function TodayPage() {
     const { user } = useAuth();
     return (
         <div className="page">
-            <header className="page-header">
-                <h1>Today</h1>
-                <span className="muted">{new Date().toDateString()}</span>
-            </header>
+            <PageHeader
+                title="Today"
+                subtitle={new Date().toLocaleDateString(undefined, {
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                })}
+            />
             <CheckInCard />
-            <div className="card" style={{ marginTop: 16 }}>
-                <p className="muted small">
-                    Welcome, <strong>{user?.full_name}</strong>. Time entries arrive in Phase 5.
-                </p>
-            </div>
+            <div style={{ height: 16 }} />
+            <TodayEntriesList />
+            <p className="page-foot muted small">
+                Signed in as {user?.full_name} · {user?.email}
+            </p>
         </div>
     );
 }

@@ -9,17 +9,19 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 from app.models.enums import TimesheetStatus
+from sqlalchemy import Index
 
 
 class TimesheetPeriod(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "timesheet_period"
     __table_args__ = (
         UniqueConstraint("user_id", "period_start", "period_end", name="uq_timesheet_period"),
+        Index("ix_timesheet_period_status", "status"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("app_user.id", ondelete="CASCADE"),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )

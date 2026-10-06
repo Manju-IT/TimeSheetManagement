@@ -1,42 +1,87 @@
-import { NavLink, Routes, Route, Navigate } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
+
+import { AdminLayout } from './AdminLayout';
+
+import { UsersAdminPage } from './pages/UsersAdminPage';
+import { TeamsAdminPage } from './pages/TeamsAdminPage';
+import { WorkSitesAdminPage } from './pages/WorkSitesAdminPage';
+import { PoliciesAdminPage } from './pages/PoliciesAdminPage';
+import { OrganizationAdminPage } from './pages/OrganizationAdminPage';
+import { SSOAdminPage } from './pages/SSOAdminPage';
+import { AuditLogAdminPage } from './pages/AuditLogAdminPage';
+import { SyncLogAdminPage } from './pages/SyncLogAdminPage';
+import { GithubAdminPage } from './GithubAdminPage';
+
+import { ProjectsAdminPage } from './pages/ProjectsAdminPage';
+import { TasksAdminPage } from './pages/TasksAdminPage';
+
+
 
 export function AdminLandingPage() {
     return (
-        <div className="page">
-            <header className="page-header">
-                <h1>Admin</h1>
-            </header>
-            <nav className="admin-tabs">
-                <NavLink to="/admin/users" className="admin-tab">Users & Roles</NavLink>
-                <NavLink to="/admin/teams" className="admin-tab">Teams</NavLink>
-                <NavLink to="/admin/audit" className="admin-tab">Audit Log</NavLink>
-                <NavLink to="/admin/github" className="admin-tab">GitHub</NavLink>
-                <NavLink to="/admin/sites" className="admin-tab">Work Sites</NavLink>
-                <NavLink to="/admin/policies" className="admin-tab">Policies</NavLink>
-            </nav>
-            <div className="card">
-                <Routes>
-                    <Route index element={<Navigate to="users" replace />} />
-                    <Route path="users" element={<Stub name="Users & Roles" phase="4" />} />
-                    <Route path="teams" element={<Stub name="Teams" phase="4" />} />
-                    <Route path="audit" element={<Stub name="Audit Log" phase="4" />} />
-                    <Route path="github" element={<Stub name="GitHub Integration" phase="7" />} />
-                    <Route path="sites" element={<Stub name="Work Sites" phase="4" />} />
-                    <Route path="policies" element={<Stub name="Policies" phase="4" />} />
-                </Routes>
-            </div>
-        </div>
-    );
-}
+        <Routes>
 
-function Stub({ name, phase }: { name: string; phase: string }) {
-    return (
-        <div>
-            <h2 style={{ fontSize: 14, marginTop: 0 }}>{name}</h2>
-            <p className="muted">
-                Admin surface will be implemented in Phase {phase}. Backend endpoints are already
-                live and authorized.
-            </p>
-        </div>
+            <Route element={<AdminLayout />}>
+
+                <Route
+                    index
+                    element={
+                        <Navigate
+                            to="organization"
+                            replace
+                        />
+                    }
+                />
+
+                <Route
+                    path="organization"
+                    element={<OrganizationAdminPage />}
+                />
+
+                <Route
+                    path="users"
+                    element={<UsersAdminPage />}
+                />
+
+                <Route
+                    path="teams"
+                    element={<TeamsAdminPage />}
+                />
+
+                <Route
+                    path="github"
+                    element={<GithubAdminPage />}
+                />
+
+                <Route
+                    path="sync-logs"
+                    element={<SyncLogAdminPage />}
+                />
+
+                <Route
+                    path="sso"
+                    element={<SSOAdminPage />}
+                />
+
+                <Route
+                    path="work-sites"
+                    element={<WorkSitesAdminPage />}
+                />
+
+                <Route
+                    path="policies"
+                    element={<PoliciesAdminPage />}
+                />
+
+                <Route
+                    path="audit"
+                    element={<AuditLogAdminPage />}
+                />
+                <Route path="projects" element={<ProjectsAdminPage />} />
+                <Route path="tasks" element={<TasksAdminPage />} />
+
+            </Route>
+
+        </Routes>
     );
 }

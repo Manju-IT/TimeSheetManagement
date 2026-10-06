@@ -30,6 +30,7 @@ class GeoEventOut(BaseModel):
     place_label: str | None = None
     site_id: uuid.UUID | None = None
     inside_site: bool | None = None
+    distance_to_site_m: float | None = None
 
 
 class WorkSessionOut(BaseModel):
@@ -55,11 +56,12 @@ class AttendanceDayOut(BaseModel):
 
 
 class AttendanceTodayOut(BaseModel):
+    work_date: date
     attendance_day: AttendanceDayOut | None = None
     active_session: WorkSessionOut | None = None
+    stale_session: WorkSessionOut | None = None
     first_login_event: GeoEventOut | None = None
     last_logout_event: GeoEventOut | None = None
-
 
 class CheckInOut(BaseModel):
     attendance_day: AttendanceDayOut

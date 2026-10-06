@@ -1,96 +1,64 @@
-# Python
+
+---
+
+## FIX 5 — Root `.gitignore`
+
+```gitignore
+# ---------- Python ----------
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
 .venv/
 venv/
 env/
 ENV/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-.pyre/
-.pytype/
-.pyright/
-pip-wheel-metadata/
-build/
+.python-version
+
+# Alembic
+alembic/versions/__pycache__/
+
+# ---------- Node / Vite ----------
+node_modules/
 dist/
+dist-ssr/
+.vite/
+*.local
+*.tsbuildinfo
 
-# Python packaging
-*.whl
-*.tar.gz
-MANIFEST
-
-# Env / Secrets
+# ---------- Environment ----------
 .env
 .env.*
 !.env.example
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
-secrets/
-credentials/
-config.local.*
 
-# Node
-node_modules/
-dist/
-.vite/
-.next/
-.nuxt/
-.cache/
-.parcel-cache/
-*.tsbuildinfo
+# ---------- IDE ----------
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---------- Logs / runtime ----------
+*.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+pids/
+*.pid
+*.seed
 
-# IDE
-.idea/
-.vscode/
-.DS_Store
-*.swp
-*.swo
-*.swn
-*.sublime-workspace
-*.sublime-project
-
-# Logs
-*.log
-logs/
-
-# OS
-Thumbs.db
-Desktop.ini
-
-# Databases / local data
-*.sqlite
-*.sqlite3
-*.db
-*.db-shm
-*.db-wal
-
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.backup
-*.orig
-*.rej
-
-# Build / coverage
+# ---------- Coverage / caches ----------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.eslintcache
+.coverage
 coverage/
-.cache/
-tmp/
-temp/
-
-# Docker
-.docker/
-
-# Local development
-.local/
+htmlcov/

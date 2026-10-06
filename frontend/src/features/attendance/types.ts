@@ -3,16 +3,22 @@ export type GeoEventType = 'login' | 'logout' | 'heartbeat';
 
 export interface GeoEvent {
     id: string;
-    event_type: GeoEventType;
+    event_type: 'login' | 'logout';
     occurred_at: string;
     client_reported_at: string | null;
+
     latitude: number | null;
     longitude: number | null;
     accuracy_m: number | null;
-    geo_permission: GeoPermission;
+
+    geo_permission: 'granted' | 'denied' | 'unavailable';
+
     place_label: string | null;
+
     site_id: string | null;
     inside_site: boolean | null;
+
+    distance_to_site_m: number | null;
 }
 
 export interface WorkSession {
@@ -36,8 +42,10 @@ export interface AttendanceDay {
 }
 
 export interface AttendanceToday {
+    work_date: string;              // NEW: 'YYYY-MM-DD' from the server
     attendance_day: AttendanceDay | null;
     active_session: WorkSession | null;
+    stale_session: WorkSession | null;   // NEW
     first_login_event: GeoEvent | null;
     last_logout_event: GeoEvent | null;
 }
@@ -52,9 +60,10 @@ export interface CheckInResult {
 export interface CheckOutResult {
     attendance_day: AttendanceDay | null;
     work_session: WorkSession | null;
-    logout_event: GeoEvenat | null;
+    logout_event: GeoEvent | null;
     is_duplicate: boolean;
 }
+
 
 export interface TeamAttendanceRow {
     user_id: string;

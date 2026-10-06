@@ -31,8 +31,8 @@ async def list_audit_logs(
 ) -> PaginatedResponse[AuditLogOut]:
     # Audit is org-wide; the DB currently has no org column on audit_log,
     # so we restrict by the set of users in this org when the caller filters by actor.
-    base = select(AuditLog)
-    count_stmt = select(func.count(AuditLog.id))
+    base = select(AuditLog).where(AuditLog.org_id == actor.org_id)
+    count_stmt = select(func.count(AuditLog.id)).where(AuditLog.org_id == actor.org_id)
     if action:
         base = base.where(AuditLog.action == action)
         count_stmt = count_stmt.where(AuditLog.action == action)
@@ -60,7 +60,15 @@ async def list_audit_logs(
         ).scalars()
     )
     return PaginatedResponse[AuditLogOut](
-        data=[AuditLogOut.model_validate(r) for r in rows],
+        data=[
+                AuditLogOut.model_validate(
+                    {
+                        **r.__dict__,
+                        "ip": str(r.ip) if r.ip is not None else None,
+                    }
+                )
+                for r in rows
+            ],
         pagination=PaginationMeta(
             page=pagination.page,
             page_size=pagination.page_size,

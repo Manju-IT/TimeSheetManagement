@@ -18,7 +18,7 @@ class WorkSession(UUIDPKMixin, TimestampMixin, Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("app_user.id", ondelete="CASCADE"),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )

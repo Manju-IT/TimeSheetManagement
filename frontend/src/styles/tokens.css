@@ -1,0 +1,152 @@
+:root {
+    /* =========================================================
+       TSM DESIGN SYSTEM
+       Premium SaaS / Modern Enterprise
+       ========================================================= */
+
+    /* ---------- Canvas ---------- */
+    --bg: #f7f8fb;
+    --bg-subtle: #f1f3f7;
+    --bg-elevated: #ffffff;
+    --bg-input: #ffffff;
+    --bg-hover: #f5f7fa;
+    --bg-active: #eef2ff;
+    --bg-overlay: rgba(15, 23, 42, 0.42);
+
+    /* ---------- Borders ---------- */
+    --border: #e2e6ed;
+    --border-muted: #edf0f4;
+    --border-strong: #cbd2dc;
+    --border-focus: #4f46e5;
+
+    /* ---------- Text ---------- */
+    --text: #111827;
+    --text-muted: #667085;
+    --text-subtle: #98a2b3;
+    --text-inverse: #ffffff;
+
+    /* ---------- Primary ---------- */
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+    --accent-active: #3730a3;
+    --accent-subtle: #eef2ff;
+    --accent-soft: #e0e7ff;
+
+    /* ---------- Semantic ---------- */
+    --success: #16a34a;
+    --success-subtle: #ecfdf3;
+    --success-text: #15803d;
+    --success-border: #bbf7d0;
+
+    --warning: #d97706;
+    --warning-subtle: #fffbeb;
+    --warning-text: #b45309;
+    --warning-border: #fde68a;
+
+    --danger: #dc2626;
+    --danger-subtle: #fef2f2;
+    --danger-text: #b91c1c;
+    --danger-border: #fecaca;
+
+    --info: #2563eb;
+    --info-subtle: #eff6ff;
+    --info-text: #1d4ed8;
+    --info-border: #bfdbfe;
+
+    /* ---------- Spacing ---------- */
+    --s-1: 2px;
+    --s-2: 4px;
+    --s-3: 6px;
+    --s-4: 8px;
+    --s-5: 12px;
+    --s-6: 16px;
+    --s-7: 20px;
+    --s-8: 24px;
+    --s-9: 32px;
+    --s-10: 40px;
+    --s-11: 48px;
+    --s-12: 64px;
+
+    /* ---------- Radius ---------- */
+    --r-xs: 5px;
+    --r-sm: 7px;
+    --r: 10px;
+    --r-md: 12px;
+    --r-lg: 14px;
+    --r-xl: 18px;
+    --r-pill: 999px;
+
+    /* ---------- Shadows ---------- */
+    --shadow-xs:
+        0 1px 2px rgba(16, 24, 40, 0.04);
+
+    --shadow-sm:
+        0 1px 3px rgba(16, 24, 40, 0.06),
+        0 1px 2px rgba(16, 24, 40, 0.03);
+
+    --shadow-md:
+        0 4px 12px rgba(16, 24, 40, 0.07),
+        0 2px 4px rgba(16, 24, 40, 0.04);
+
+    --shadow-lg:
+        0 12px 32px rgba(16, 24, 40, 0.10),
+        0 4px 12px rgba(16, 24, 40, 0.05);
+
+    --shadow-xl:
+        0 24px 60px rgba(16, 24, 40, 0.14),
+        0 8px 20px rgba(16, 24, 40, 0.06);
+
+    /* ---------- Typography ---------- */
+    --font:
+        "Inter",
+        ui-sans-serif,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Helvetica,
+        Arial,
+        sans-serif;
+
+    --mono:
+        "SFMono-Regular",
+        "Cascadia Code",
+        "Roboto Mono",
+        Consolas,
+        monospace;
+
+    --fs-11: 11px;
+    --fs-12: 12px;
+    --fs-13: 13px;
+    --fs-14: 14px;
+    --fs-15: 15px;
+    --fs-16: 16px;
+    --fs-18: 18px;
+    --fs-20: 20px;
+    --fs-24: 24px;
+    --fs-28: 28px;
+    --fs-32: 32px;
+
+    --lh-tight: 1.2;
+    --lh: 1.5;
+    --lh-loose: 1.7;
+
+    /* ---------- Layout ---------- */
+    --sidebar-width: 248px;
+    --content-max-width: 1480px;
+
+    /* ---------- Z-index ---------- */
+    --z-banner: 10;
+    --z-overlay: 50;
+    --z-modal: 60;
+    --z-toast: 80;
+    --z-tooltip: 90;
+
+    /* ---------- Motion ---------- */
+    --t-fast: 100ms;
+    --t: 160ms;
+    --t-slow: 240ms;
+
+    --ease:
+        cubic-bezier(0.22, 1, 0.36, 1);
+}

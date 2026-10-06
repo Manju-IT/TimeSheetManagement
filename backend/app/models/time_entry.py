@@ -35,11 +35,20 @@ class TimeEntry(UUIDPKMixin, TimestampMixin, Base):
         Index("ix_time_entry_user_date", "user_id", "work_date"),
         Index("ix_time_entry_project_date", "project_id", "work_date"),
         Index("ix_time_entry_task", "task_id"),
+        CheckConstraint(
+            "started_at IS NULL OR ended_at IS NULL OR ended_at > started_at",
+            name="ck_time_entry_ended_after_started",
+        ),
+        CheckConstraint(
+            "(started_at IS NULL AND ended_at IS NULL) "
+            "OR (started_at IS NOT NULL AND ended_at IS NOT NULL)",
+            name="ck_time_entry_times_consistent",
+        ),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("app_user.id", ondelete="CASCADE"),
+        ForeignKey("app_user.id", ondelete="RESTRICT"),
         nullable=False,
     )
     work_date: Mapped[date] = mapped_column(Date, nullable=False)

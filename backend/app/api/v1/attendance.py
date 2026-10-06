@@ -7,7 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import get_current_user
+from app.api.dependencies.rate_limit import rate_limit
 from app.core.database import get_db
+from app.core.idempotency import idempotent_call
 from app.core.permissions import CurrentUser
 from app.models.attendance_day import AttendanceDay
 from app.models.enums import GeoEventType
@@ -45,7 +47,6 @@ def _payload(p: LocationInput) -> LocationPayload:
 def _ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
-
 @router.get("/today", response_model=AttendanceTodayOut)
 async def today(
     user: CurrentUser = Depends(get_current_user),
@@ -57,8 +58,15 @@ async def today(
     org = (
         await db.execute(select(Organization).where(Organization.id == app_user.org_id))
     ).scalar_one()
+
     tz_name = app_user.timezone or org.default_timezone
-    work_date = work_date_for(datetime.now(timezone.utc), tz_name, org.workday_cutoff)
+    now_utc = datetime.now(timezone.utc)
+    work_date = work_date_for(now_utc, tz_name, org.workday_cutoff)
+
+    # Today's work-date window in UTC — used to classify any active session.
+    from app.services.attendance_service import work_date_window_utc
+
+    start_utc, end_utc = work_date_window_utc(work_date, tz_name, org.workday_cutoff)
 
     attendance = (
         await db.execute(
@@ -68,7 +76,16 @@ async def today(
             )
         )
     ).scalar_one_or_none()
-    active = await session_service.get_active_session(db, user.id)
+
+    # Active session inside today's window.
+    active = await session_service.get_active_session_in_window(
+        db, user.id, start_utc=start_utc, end_utc=end_utc
+    )
+
+    # Any *other* active session is a stale one from a prior work_date.
+    stale = None
+    if active is None:
+        stale = await session_service.get_active_session(db, user.id)
 
     first_evt = None
     last_evt = None
@@ -87,70 +104,116 @@ async def today(
             ).scalar_one_or_none()
 
     return AttendanceTodayOut(
+        work_date=work_date,
         attendance_day=AttendanceDayOut.model_validate(attendance) if attendance else None,
         active_session=WorkSessionOut.model_validate(active) if active else None,
+        stale_session=WorkSessionOut.model_validate(stale) if stale else None,
         first_login_event=GeoEventOut.model_validate(first_evt) if first_evt else None,
         last_logout_event=GeoEventOut.model_validate(last_evt) if last_evt else None,
     )
 
 
-@router.post("/check-in", response_model=CheckInOut)
+@router.post(
+    "/check-in",
+    response_model=CheckInOut,
+    dependencies=[Depends(rate_limit("attendance.check_in"))],
+)
 async def check_in(
     payload: LocationInput,
     request: Request,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CheckInOut:
-    result = await attendance_service.check_in(
+
+    async def _do() -> CheckInOut:
+        result = await attendance_service.check_in(
+            db,
+            user_id=user.id,
+            payload=_payload(payload),
+            ip=_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+
+        return CheckInOut(
+            attendance_day=AttendanceDayOut.model_validate(
+                result.attendance_day
+            ),
+            work_session=WorkSessionOut.model_validate(
+                result.work_session
+            ),
+            login_event=GeoEventOut.model_validate(
+                result.login_event
+            ),
+            is_duplicate=result.is_duplicate,
+        )
+
+    return await idempotent_call(
         db,
-        user_id=user.id,
-        payload=_payload(payload),
-        ip=_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    )
-    return CheckInOut(
-        attendance_day=AttendanceDayOut.model_validate(result.attendance_day),
-        work_session=WorkSessionOut.model_validate(result.work_session),
-        login_event=GeoEventOut.model_validate(result.login_event),
-        is_duplicate=result.is_duplicate,
+        request=request,
+        scope="attendance.check_in",
+        handler=_do,
     )
 
 
-@router.post("/check-out", response_model=CheckOutOut)
+@router.post(
+    "/check-out",
+    response_model=CheckOutOut,
+    dependencies=[Depends(rate_limit("attendance.check_out"))],
+)
 async def check_out(
     payload: LocationInput,
     request: Request,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CheckOutOut:
-    result = await attendance_service.check_out(
+
+    async def _do() -> CheckOutOut:
+        result = await attendance_service.check_out(
+            db,
+            user_id=user.id,
+            payload=_payload(payload),
+            ip=_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+
+        return CheckOutOut(
+            attendance_day=(
+                AttendanceDayOut.model_validate(
+                    result.attendance_day
+                )
+                if result.attendance_day
+                else None
+            ),
+            work_session=(
+                WorkSessionOut.model_validate(
+                    result.work_session
+                )
+                if result.work_session
+                else None
+            ),
+            logout_event=(
+                GeoEventOut.model_validate(
+                    result.logout_event
+                )
+                if result.logout_event
+                else None
+            ),
+            is_duplicate=result.is_duplicate,
+        )
+
+    return await idempotent_call(
         db,
-        user_id=user.id,
-        payload=_payload(payload),
-        ip=_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    )
-    return CheckOutOut(
-        attendance_day=(
-            AttendanceDayOut.model_validate(result.attendance_day)
-            if result.attendance_day
-            else None
-        ),
-        work_session=(
-            WorkSessionOut.model_validate(result.work_session)
-            if result.work_session
-            else None
-        ),
-        logout_event=(
-            GeoEventOut.model_validate(result.logout_event)
-            if result.logout_event
-            else None
-        ),
-        is_duplicate=result.is_duplicate,
+        request=request,
+        scope="attendance.check_out",
+        handler=_do,
     )
 
 
-@router.get("/events", response_model=list[GeoEventOut])
+@router.get(
+    "/events",
+    response_model=list[GeoEventOut],
+    dependencies=[Depends(rate_limit("attendance.read"))],
+)
 async def my_events(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -170,10 +233,18 @@ async def my_events(
             )
         ).scalars()
     )
-    return [GeoEventOut.model_validate(e) for e in rows]
+
+    return [
+        GeoEventOut.model_validate(event)
+        for event in rows
+    ]
 
 
-@router.get("/sessions", response_model=list[WorkSessionOut])
+@router.get(
+    "/sessions",
+    response_model=list[WorkSessionOut],
+    dependencies=[Depends(rate_limit("attendance.read"))],
+)
 async def my_sessions(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -189,4 +260,8 @@ async def my_sessions(
             )
         ).scalars()
     )
-    return [WorkSessionOut.model_validate(s) for s in rows]
+
+    return [
+        WorkSessionOut.model_validate(session)
+        for session in rows
+    ]

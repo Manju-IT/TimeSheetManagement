@@ -8,10 +8,23 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 from app.models.enums import SyncDirection, SyncEntity, SyncStatus, SyncTrigger
+from sqlalchemy import ForeignKey, Index, Text
 
 
 class SyncLog(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "sync_log"
+
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organization.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        Index("ix_sync_log_org_created", "org_id", "created_at"),
+        Index("ix_sync_log_created_at", "created_at"),
+        Index("ix_sync_log_status", "status"),
+    )
 
     direction: Mapped[SyncDirection] = mapped_column(
         SAEnum(SyncDirection, name="sync_direction", native_enum=True), nullable=False

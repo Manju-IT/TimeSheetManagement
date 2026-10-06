@@ -2,24 +2,79 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { attendanceApi } from './api';
 import { useGeolocation } from './useGeolocation';
+import { useToast } from '@/components/ui/Toast';
+import { Card, CardHeader } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Banner } from '@/components/ui/Banner';
+import { Icon } from '@/components/ui/Icon';
+import { SkeletonCards } from '@/components/ui/Skeleton';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { classifyError } from '@/lib/errors';
 import type { GeoPermission } from './types';
 
-function fmtTime(iso: string | null | undefined): string {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function isSameLocalDay(
+    iso: string | null | undefined,
+    ref: string
+): boolean {
+    if (!iso) return false;
+
+    const a = new Date(iso);
+    const b = new Date(ref + 'T00:00:00');
+
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
 }
 
-function fmtDuration(seconds: number | null | undefined): string {
+function fmtDateTime(
+    iso: string | null | undefined,
+    refDay: string
+): string {
+    if (!iso) return '—';
+
+    if (isSameLocalDay(iso, refDay)) {
+        return new Date(iso).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    }
+
+    // Different day — always show the date so confusion is impossible.
+    return new Date(iso).toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function fmtWorkDate(iso: string): string {
+    return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    });
+}
+
+function fmtDuration(seconds?: number | null) {
     if (!seconds || seconds <= 0) return '0h 00m';
+
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
+
     return `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
 export function CheckInCard() {
     const qc = useQueryClient();
+    const toast = useToast();
     const geo = useGeolocation();
-    const [message, setMessage] = useState<string | null>(null);
+
+    const [actionError, setActionError] = useState<string | null>(null);
 
     const todayQuery = useQuery({
         queryKey: ['attendance', 'today'],
@@ -27,11 +82,19 @@ export function CheckInCard() {
         refetchInterval: 30_000,
     });
 
-    const data = todayQuery.data;
+    const today = todayQuery.data;
+    const attendance = today?.attendance_day ?? null;
+    const active = today?.active_session ?? null;
+    const firstEvent = today?.first_login_event ?? null;
+
+    const serverWorkDate = today?.work_date ?? '';
+    const stale = today?.stale_session ?? null;
 
     async function withLocation() {
         const result = await geo.request();
+
         const geo_permission: GeoPermission = result.permission;
+
         return {
             latitude: result.fix?.latitude ?? null,
             longitude: result.fix?.longitude ?? null,
@@ -42,121 +105,301 @@ export function CheckInCard() {
     }
 
     const checkIn = useMutation({
-        mutationFn: async () => attendanceApi.checkIn(await withLocation()),
+        mutationFn: async () =>
+            attendanceApi.checkIn(await withLocation()),
+
         onSuccess: (res) => {
-            setMessage(
-                res.is_duplicate
-                    ? 'Already checked in for today — continuing your active session.'
-                    : 'Checked in.',
+            toast.success(
+                res.is_duplicate ? 'Already checked in' : 'Checked in',
+                `at ${new Date().toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                })}`
             );
-            qc.invalidateQueries({ queryKey: ['attendance'] });
+
+            qc.invalidateQueries({
+                queryKey: ['attendance'],
+            });
+
+            setActionError(null);
         },
-        onError: (e: Error) => setMessage(e.message),
+
+        onError: (e) => {
+            const c = classifyError(e);
+
+            setActionError(c.message);
+            toast.error('Check-in failed', c.message);
+        },
     });
 
     const checkOut = useMutation({
-        mutationFn: async () => attendanceApi.checkOut(await withLocation()),
+        mutationFn: async () =>
+            attendanceApi.checkOut(await withLocation()),
+
         onSuccess: (res) => {
-            setMessage(res.is_duplicate ? 'No active session — nothing to close.' : 'Checked out.');
-            qc.invalidateQueries({ queryKey: ['attendance'] });
+            toast.success(
+                res.is_duplicate
+                    ? 'Nothing to check out'
+                    : 'Checked out'
+            );
+
+            qc.invalidateQueries({
+                queryKey: ['attendance'],
+            });
+
+            setActionError(null);
         },
-        onError: (e: Error) => setMessage(e.message),
+
+        onError: (e) => {
+            const c = classifyError(e);
+
+            setActionError(c.message);
+            toast.error('Check-out failed', c.message);
+        },
     });
 
-    if (todayQuery.isLoading) return <div className="card">Loading attendance…</div>;
-    if (todayQuery.isError) return <div className="card">Failed to load attendance.</div>;
+    if (todayQuery.isLoading) {
+        return <SkeletonCards count={1} />;
+    }
 
-    const attendance = data?.attendance_day;
-    const active = data?.active_session;
-    const first = data?.first_login_event;
-    const last = data?.last_logout_event;
+    if (todayQuery.isError) {
+        const e = classifyError(todayQuery.error);
+
+        return (
+            <ErrorState
+                title="Failed to load attendance"
+                message={e.message}
+                onRetry={() => todayQuery.refetch()}
+            />
+        );
+    }
+
+    const busy =
+        checkIn.isPending ||
+        checkOut.isPending ||
+        geo.loading;
 
     const place =
-        first?.place_label ??
-        (first?.inside_site === true
-            ? 'On site'
-            : first?.inside_site === false
-                ? 'Off site'
-                : null);
-
-    const busy = checkIn.isPending || checkOut.isPending || geo.loading;
+        firstEvent?.place_label ??
+        (
+            firstEvent?.inside_site === true
+                ? 'On site'
+                : firstEvent?.inside_site === false
+                    ? 'Off site'
+                    : null
+        );
 
     return (
-        <div className="card attendance-card">
-            <div className="attendance-grid">
-                <Stat label="First login" value={fmtTime(attendance?.first_login_at)} sub={place} />
-                <Stat label="Last logout" value={fmtTime(attendance?.last_logout_at)} />
-                <Stat label="Session time" value={fmtDuration(attendance?.total_session_seconds)} />
-                <Stat label="Logged" value={fmtDuration(attendance?.logged_seconds)} />
+        <Card>
+            <CardHeader
+                title="Attendance"
+                subtitle={
+                    serverWorkDate
+                        ? fmtWorkDate(serverWorkDate)
+                        : new Date().toDateString()
+                }
+                actions={
+                    active ? (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            iconLeft="logout"
+                            onClick={() => checkOut.mutate()}
+                            loading={busy}
+                            disabled={busy}
+                        >
+                            Check out
+                        </Button>
+                    ) : attendance?.last_logout_at ? (
+                        <Badge tone="success" icon="check">
+                            Attendance completed
+                        </Badge>
+                    ) : (
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            iconLeft="clock"
+                            onClick={() => checkIn.mutate()}
+                            loading={busy}
+                            disabled={busy}
+                        >
+                            Check in
+                        </Button>
+                    )
+                }
+            />
+
+            <div className="stats-grid">
+                <Stat
+                    label="First login"
+                    value={fmtDateTime(
+                        attendance?.first_login_at,
+                        serverWorkDate
+                    )}
+                    sub={place ?? undefined}
+                />
+
+                <Stat
+                    label="Last logout"
+                    value={fmtDateTime(
+                        attendance?.last_logout_at,
+                        serverWorkDate
+                    )}
+                    sub={active ? 'session active' : undefined}
+                />
+
+                <Stat
+                    label="Session time"
+                    value={fmtDuration(
+                        attendance?.total_session_seconds
+                    )}
+                />
+
+                <Stat
+                    label="Logged"
+                    value={fmtDuration(
+                        attendance?.logged_seconds
+                    )}
+                />
             </div>
 
-            {first?.geo_permission === 'denied' && (
-                <div className="alert alert-info">
-                    Location permission was denied for this check-in. You can continue working; your
-                    manager will see a <em>location denied</em> flag on this day.
-                </div>
-            )}
-            {first?.geo_permission === 'unavailable' && (
-                <div className="alert alert-info">
-                    Your browser could not determine a location. This is recorded but does not block work.
-                </div>
-            )}
-            {first?.inside_site === false && (
-                <div className="alert alert-info">
-                    You are outside the configured work-site geofence. The event was still recorded.
-                </div>
+            {stale && (
+                <Banner
+                    tone="warning"
+                    title="You have an open session from a previous day"
+                    action={
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={checkOut.isPending}
+                            onClick={() => checkOut.mutate()}
+                        >
+                            Close it now
+                        </Button>
+                    }
+                >
+                    Started{' '}
+                    {new Date(stale.login_at).toLocaleString()}.
+                    {' '}
+                    Closing it will record the checkout at the
+                    current time and update the corresponding
+                    workday.
+                </Banner>
             )}
 
-            {message && <div className="alert alert-info">{message}</div>}
+            {firstEvent?.geo_permission === 'denied' && (
+                <Banner
+                    tone="warning"
+                    title="Location permission was denied"
+                >
+                    You can still work. Your manager sees a{' '}
+                    <em>location denied</em> flag on this day.
+                </Banner>
+            )}
 
-            <div className="attendance-actions">
-                {active ? (
-                    <>
-                        <span className="status-pill status-success">
-                            Checked in · {fmtTime(active.login_at)}
+            {firstEvent?.geo_permission === 'unavailable' && (
+                <Banner
+                    tone="info"
+                    title="Location unavailable"
+                >
+                    The browser could not determine a location.
+                    This does not block work.
+                </Banner>
+            )}
+
+            {firstEvent?.inside_site === false && (
+                <Banner
+                    tone="info"
+                    title="Outside work-site geofence"
+                >
+                    The event was still recorded.
+                </Banner>
+            )}
+
+            {actionError && (
+                <Banner
+                    tone="danger"
+                    title="Action failed"
+                >
+                    {actionError}
+                </Banner>
+            )}
+
+            {active && (
+                <div className="attendance-active">
+                    <Badge tone="success" icon="clock">
+                        Active since{' '}
+                        {fmtDateTime(
+                            active.login_at,
+                            serverWorkDate
+                        )}
+                    </Badge>
+
+                    {active.session_seconds != null && (
+                        <span className="muted small">
+                            ·{' '}
+                            {fmtDuration(
+                                active.session_seconds
+                            )}{' '}
+                            elapsed
                         </span>
-                        <button
-                            className="btn btn-secondary"
-                            disabled={busy}
-                            onClick={() => {
-                                setMessage(null);
-                                checkOut.mutate();
-                            }}
-                        >
-                            {checkOut.isPending || geo.loading ? 'Checking out…' : 'Check out for the day'}
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <span className="status-pill">Not checked in</span>
-                        <button
-                            className="btn btn-primary"
-                            disabled={busy}
-                            onClick={() => {
-                                setMessage(null);
-                                checkIn.mutate();
-                            }}
-                        >
-                            {checkIn.isPending || geo.loading ? 'Checking in…' : 'Check in'}
-                        </button>
-                    </>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
+            {!active && attendance?.last_logout_at && (
+                <Banner
+                    tone="success"
+                    title="Attendance completed for today"
+                >
+                    You checked out at{' '}
+                    {fmtDateTime(
+                        attendance.last_logout_at,
+                        serverWorkDate
+                    )}.
+                    {' '}You cannot check in again during this workday.
+                </Banner>
+            )}
 
-            <p className="muted small location-consent">
-                Location is captured only at check-in and check-out — never continuously. You can see
-                your own history under <strong>My location history</strong>.
-            </p>
-        </div>
+            <div className="attendance-privacy">
+                <Icon name="info" size={12} />
+
+                <span>
+                    Location is captured only at check-in and
+                    check-out. See{' '}
+                    <a href="/location-history">
+                        your history
+                    </a>
+                    .
+                </span>
+            </div>
+        </Card>
     );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
+function Stat({
+    label,
+    value,
+    sub,
+}: {
+    label: string;
+    value: string;
+    sub?: string;
+}) {
     return (
         <div className="stat">
-            <span className="stat-label">{label}</span>
-            <span className="stat-value">{value}</span>
-            {sub && <span className="stat-sub">{sub}</span>}
+            <div className="stat-label">
+                {label}
+            </div>
+
+            <div className="stat-value num">
+                {value}
+            </div>
+
+            {sub && (
+                <div className="stat-sub">
+                    {sub}
+                </div>
+            )}
         </div>
     );
 }

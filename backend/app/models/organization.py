@@ -3,12 +3,30 @@ from __future__ import annotations
 import uuid
 from datetime import time
 
-from sqlalchemy import ForeignKey, Text, Time
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import ForeignKey, Text, Time, Boolean
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 
+
+class SSOConfig(UUIDPKMixin, TimestampMixin, Base):
+    __tablename__ = "sso_config"
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    group_claim: Mapped[str] = mapped_column(Text, nullable=False, default="groups")
+    group_to_role_admin: Mapped[str | None] = mapped_column(Text, nullable=True)
+    group_to_role_manager: Mapped[str | None] = mapped_column(Text, nullable=True)
+    group_to_role_member: Mapped[str | None] = mapped_column(Text, nullable=True)
+    allowed_embed_origins: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
 
 class Organization(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "organization"

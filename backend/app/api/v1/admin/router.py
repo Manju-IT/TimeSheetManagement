@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 
-from app.api.v1.admin import audit, teams, users
+from app.api.v1.admin import audit, github, teams, users
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 router.include_router(users.router)
 router.include_router(teams.router)
 router.include_router(audit.router)
+router.include_router(github.router)

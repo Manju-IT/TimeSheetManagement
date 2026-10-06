@@ -11,14 +11,24 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import settings
 
+
+# ============================================================
+# Database Engine
+# ============================================================
+
 _engine: AsyncEngine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-    future=True,
+    pool_size=10,  # Adjust as needed
+    max_overflow=20,  # Adjust as needed
+    pool_timeout=30,  # 30 seconds
+    pool_recycle=1800,  # Recycle connections every 30 minutes
 )
+
+
+# ============================================================
+# Session Factory
+# ============================================================
 
 AsyncSessionLocal = async_sessionmaker(
     bind=_engine,
@@ -28,16 +38,43 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+# ============================================================
+# Engine Access
+# ============================================================
+
 def get_engine() -> AsyncEngine:
+    """Return the application's shared SQLAlchemy async engine."""
     return _engine
 
 
+# ============================================================
+# FastAPI Database Dependency
+# ============================================================
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency: yields a session, commits on success, rolls back on error."""
+    """
+    FastAPI dependency that provides an AsyncSession.
+
+    Transaction behavior:
+        - Endpoint succeeds  -> commit
+        - Endpoint raises    -> rollback
+        - Session closes     -> always
+    """
+
     async with AsyncSessionLocal() as session:
         try:
             yield session
             await session.commit()
+
         except Exception:
             await session.rollback()
             raise
+
+
+# ============================================================
+# Application Shutdown
+# ============================================================
+
+async def close_db() -> None:
+    """Dispose the SQLAlchemy engine during application shutdown."""
+    await _engine.dispose()

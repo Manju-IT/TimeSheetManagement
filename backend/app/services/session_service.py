@@ -11,13 +11,53 @@ from app.models.work_session import WorkSession
 
 
 async def get_active_session(
-    db: AsyncSession, user_id: uuid.UUID, *, for_update: bool = False
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> WorkSession | None:
-    stmt = select(WorkSession).where(
-        WorkSession.user_id == user_id, WorkSession.logout_at.is_(None)
+    """
+    Return the user's currently active work session.
+
+    A WorkSession is active when logout_at IS NULL.
+
+    When for_update=True, lock the selected row with SELECT ... FOR UPDATE.
+    This is used by attendance check-in/check-out after the per-user advisory
+    lock has been acquired.
+    """
+    stmt = (
+        select(WorkSession)
+        .where(
+            WorkSession.user_id == user_id,
+            WorkSession.logout_at.is_(None),
+        )
+        .order_by(WorkSession.login_at.desc())
+        .limit(1)
     )
+
     if for_update:
         stmt = stmt.with_for_update()
+
+    return (
+        await db.execute(stmt)
+    ).scalar_one_or_none()
+
+async def get_active_session_in_window(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    start_utc: datetime,
+    end_utc: datetime,
+) -> WorkSession | None:
+    """Return the user's active session if and only if its login_at falls inside
+    the given [start_utc, end_utc) window. Used by `/attendance/today` so a
+    forgotten session from a prior work_date does not masquerade as today's."""
+    stmt = select(WorkSession).where(
+        WorkSession.user_id == user_id,
+        WorkSession.logout_at.is_(None),
+        WorkSession.login_at >= start_utc,
+        WorkSession.login_at < end_utc,
+    )
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
