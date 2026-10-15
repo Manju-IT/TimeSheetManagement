@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { attendanceApi } from './api';
@@ -190,189 +191,191 @@ export function CheckInCard() {
         );
 
     return (
-        <Card>
-            <CardHeader
-                title="Attendance"
-                subtitle={
-                    serverWorkDate
-                        ? fmtWorkDate(serverWorkDate)
-                        : new Date().toDateString()
-                }
-                actions={
-                    active ? (
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            iconLeft="logout"
-                            onClick={() => checkOut.mutate()}
-                            loading={busy}
-                            disabled={busy}
-                        >
-                            Check out
-                        </Button>
-                    ) : attendance?.last_logout_at ? (
-                        <Badge tone="success" icon="check">
-                            Attendance completed
-                        </Badge>
-                    ) : (
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            iconLeft="clock"
-                            onClick={() => checkIn.mutate()}
-                            loading={busy}
-                            disabled={busy}
-                        >
-                            Check in
-                        </Button>
-                    )
-                }
-            />
-
-            <div className="stats-grid">
-                <Stat
-                    label="First login"
-                    value={fmtDateTime(
-                        attendance?.first_login_at,
+        <div className="today-attendance-card">
+            <Card>
+                <CardHeader
+                    title="Attendance"
+                    subtitle={
                         serverWorkDate
-                    )}
-                    sub={place ?? undefined}
-                />
-
-                <Stat
-                    label="Last logout"
-                    value={fmtDateTime(
-                        attendance?.last_logout_at,
-                        serverWorkDate
-                    )}
-                    sub={active ? 'session active' : undefined}
-                />
-
-                <Stat
-                    label="Session time"
-                    value={fmtDuration(
-                        attendance?.total_session_seconds
-                    )}
-                />
-
-                <Stat
-                    label="Logged"
-                    value={fmtDuration(
-                        attendance?.logged_seconds
-                    )}
-                />
-            </div>
-
-            {stale && (
-                <Banner
-                    tone="warning"
-                    title="You have an open session from a previous day"
-                    action={
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            loading={checkOut.isPending}
-                            onClick={() => checkOut.mutate()}
-                        >
-                            Close it now
-                        </Button>
+                            ? fmtWorkDate(serverWorkDate)
+                            : new Date().toDateString()
                     }
-                >
-                    Started{' '}
-                    {new Date(stale.login_at).toLocaleString()}.
-                    {' '}
-                    Closing it will record the checkout at the
-                    current time and update the corresponding
-                    workday.
-                </Banner>
-            )}
+                    actions={
+                        active ? (
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                iconLeft="logout"
+                                onClick={() => checkOut.mutate()}
+                                loading={busy}
+                                disabled={busy}
+                            >
+                                Check out
+                            </Button>
+                        ) : attendance?.last_logout_at ? (
+                            <Badge tone="success" icon="check">
+                                Attendance completed
+                            </Badge>
+                        ) : (
+                            <Button
+                                variant="primary"
+                                size="sm"
+                                iconLeft="clock"
+                                onClick={() => checkIn.mutate()}
+                                loading={busy}
+                                disabled={busy}
+                            >
+                                Check in
+                            </Button>
+                        )
+                    }
+                />
 
-            {firstEvent?.geo_permission === 'denied' && (
-                <Banner
-                    tone="warning"
-                    title="Location permission was denied"
-                >
-                    You can still work. Your manager sees a{' '}
-                    <em>location denied</em> flag on this day.
-                </Banner>
-            )}
-
-            {firstEvent?.geo_permission === 'unavailable' && (
-                <Banner
-                    tone="info"
-                    title="Location unavailable"
-                >
-                    The browser could not determine a location.
-                    This does not block work.
-                </Banner>
-            )}
-
-            {firstEvent?.inside_site === false && (
-                <Banner
-                    tone="info"
-                    title="Outside work-site geofence"
-                >
-                    The event was still recorded.
-                </Banner>
-            )}
-
-            {actionError && (
-                <Banner
-                    tone="danger"
-                    title="Action failed"
-                >
-                    {actionError}
-                </Banner>
-            )}
-
-            {active && (
-                <div className="attendance-active">
-                    <Badge tone="success" icon="clock">
-                        Active since{' '}
-                        {fmtDateTime(
-                            active.login_at,
+                <div className="stats-grid">
+                    <Stat
+                        label="First login"
+                        value={fmtDateTime(
+                            attendance?.first_login_at,
                             serverWorkDate
                         )}
-                    </Badge>
+                        sub={place ?? undefined}
+                    />
 
-                    {active.session_seconds != null && (
-                        <span className="muted small">
-                            ·{' '}
-                            {fmtDuration(
-                                active.session_seconds
-                            )}{' '}
-                            elapsed
-                        </span>
-                    )}
+                    <Stat
+                        label="Last logout"
+                        value={fmtDateTime(
+                            attendance?.last_logout_at,
+                            serverWorkDate
+                        )}
+                        sub={active ? 'session active' : undefined}
+                    />
+
+                    <Stat
+                        label="Session time"
+                        value={fmtDuration(
+                            attendance?.total_session_seconds
+                        )}
+                    />
+
+                    <Stat
+                        label="Logged"
+                        value={fmtDuration(
+                            attendance?.logged_seconds
+                        )}
+                    />
                 </div>
-            )}
-            {!active && attendance?.last_logout_at && (
-                <Banner
-                    tone="success"
-                    title="Attendance completed for today"
-                >
-                    You checked out at{' '}
-                    {fmtDateTime(
-                        attendance.last_logout_at,
-                        serverWorkDate
-                    )}.
-                    {' '}You cannot check in again during this workday.
-                </Banner>
-            )}
 
-            <div className="attendance-privacy">
-                <Icon name="info" size={12} />
+                {stale && (
+                    <Banner
+                        tone="warning"
+                        title="You have an open session from a previous day"
+                        action={
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                loading={checkOut.isPending}
+                                onClick={() => checkOut.mutate()}
+                            >
+                                Close it now
+                            </Button>
+                        }
+                    >
+                        Started{' '}
+                        {new Date(stale.login_at).toLocaleString()}.
+                        {' '}
+                        Closing it will record the checkout at the
+                        current time and update the corresponding
+                        workday.
+                    </Banner>
+                )}
 
-                <span>
-                    Location is captured only at check-in and
-                    check-out. See{' '}
-                    <a href="/location-history">
-                        your history
-                    </a>
-                    .
-                </span>
-            </div>
-        </Card>
+                {firstEvent?.geo_permission === 'denied' && (
+                    <Banner
+                        tone="warning"
+                        title="Location permission was denied"
+                    >
+                        You can still work. Your manager sees a{' '}
+                        <em>location denied</em> flag on this day.
+                    </Banner>
+                )}
+
+                {firstEvent?.geo_permission === 'unavailable' && (
+                    <Banner
+                        tone="info"
+                        title="Location unavailable"
+                    >
+                        The browser could not determine a location.
+                        This does not block work.
+                    </Banner>
+                )}
+
+                {firstEvent?.inside_site === false && (
+                    <Banner
+                        tone="info"
+                        title="Outside work-site geofence"
+                    >
+                        The event was still recorded.
+                    </Banner>
+                )}
+
+                {actionError && (
+                    <Banner
+                        tone="danger"
+                        title="Action failed"
+                    >
+                        {actionError}
+                    </Banner>
+                )}
+
+                {active && (
+                    <div className="attendance-active">
+                        <Badge tone="success" icon="clock">
+                            Active since{' '}
+                            {fmtDateTime(
+                                active.login_at,
+                                serverWorkDate
+                            )}
+                        </Badge>
+
+                        {active.session_seconds != null && (
+                            <span className="muted small">
+                                ·{' '}
+                                {fmtDuration(
+                                    active.session_seconds
+                                )}{' '}
+                                elapsed
+                            </span>
+                        )}
+                    </div>
+                )}
+                {!active && attendance?.last_logout_at && (
+                    <Banner
+                        tone="success"
+                        title="Attendance completed for today"
+                    >
+                        You checked out at{' '}
+                        {fmtDateTime(
+                            attendance.last_logout_at,
+                            serverWorkDate
+                        )}.
+                        {' '}You cannot check in again during this workday.
+                    </Banner>
+                )}
+
+                <div className="attendance-privacy">
+                    <Icon name="info" size={12} />
+
+                    <span>
+                        Location is captured only at check-in and
+                        check-out. See{' '}
+                        <a href="/location-history">
+                            your history
+                        </a>
+                        .
+                    </span>
+                </div>
+            </Card>
+        </div>
     );
 }
 

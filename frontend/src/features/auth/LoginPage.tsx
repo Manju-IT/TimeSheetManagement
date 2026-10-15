@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -13,35 +14,30 @@ import { Icon } from '@/components/ui/Icon';
 import { useEmbedded } from '@/lib/EmbeddedProvider';
 
 const DEMO_USERS = [
-    { email: 'member@example.com', label: 'Milo Member · member' },
-    { email: 'manager@example.com', label: 'Mira Manager · manager' },
-    { email: 'admin@example.com', label: 'Ada Admin · admin' },
+    { email: 'member@example.com', label: 'Milo Member', role: 'Member' },
+    { email: 'manager@example.com', label: 'Mira Manager', role: 'Manager' },
+    { email: 'admin@example.com', label: 'Ada Admin', role: 'Administrator' },
 ];
 
 export function LoginPage() {
     const [params] = useSearchParams();
-
     const { user, refresh, setUser } = useAuth();
     const toast = useToast();
+    const { embedded } = useEmbedded();
 
     const configQuery = useQuery({
         queryKey: ['auth', 'config'],
         queryFn: authApi.config,
     });
 
-    const [devEmail, setDevEmail] = useState(
-        DEMO_USERS[0].email,
-    );
-
+    const [devEmail, setDevEmail] = useState(DEMO_USERS[0].email);
     const [busy, setBusy] = useState(false);
-
     const [error, setError] = useState<string | null>(
-        params.get('error')
-            ? 'Sign-in failed. Please try again.'
-            : null,
+        params.get('error') ? 'Sign-in failed. Please try again.' : null,
     );
 
-    const { embedded } = useEmbedded();
+    const config = configQuery.data;
+    const selectedDemo = DEMO_USERS.find((u) => u.email === devEmail);
 
     useEffect(() => {
         if (user) {
@@ -55,12 +51,12 @@ export function LoginPage() {
 
         try {
             const { authorize_url } = await authApi.startLogin(
-                window.location.origin + '/',
+                `${window.location.origin}/`,
             );
 
             window.location.href = authorize_url;
         } catch (e) {
-            setError((e as Error).message);
+            setError((e as Error).message || 'Unable to start sign-in.');
             setBusy(false);
         }
     }
@@ -75,162 +71,218 @@ export function LoginPage() {
             setUser(me);
             await refresh();
 
-            toast.success(
-                'Signed in',
-                `Welcome, ${me.full_name}`,
-            );
-
+            toast.success('Signed in', `Welcome, ${me.full_name}`);
             window.location.replace('/');
         } catch (e) {
-            setError((e as Error).message);
+            setError((e as Error).message || 'Unable to sign in.');
             setBusy(false);
         }
     }
 
-    const config = configQuery.data;
-
     return (
-        <div
-            className={`login-page ${embedded ? 'login-embedded' : ''
-                }`}
-        >
-            <div className="login-panel">
-
-                {/* Full branding for normal login */}
-                {!embedded && (
-                    <div className="login-brand">
-                        <div className="brand-mark brand-mark-lg">
-                            TS
-                        </div>
-
-                        <div>
-                            <div className="login-title">
+        <main className={`login-page ${embedded ? 'login-embedded' : ''}`}>
+            {!embedded && (
+                <aside className="login-showcase">
+                    <div className="login-showcase-content">
+                        <div className="login-brand login-brand-light">
+                            <div className="brand-mark brand-mark-lg">TS</div>
+                            <span className="login-brand-name">
                                 {config?.app_name ?? 'Team Timesheet'}
-                            </div>
-
-                            <div className="login-subtitle">
-                                Sign in to continue
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Compact branding for embedded login */}
-                {embedded && (
-                    <div className="login-embedded-title">
-                        <div className="brand-mark">
-                            TS
+                            </span>
                         </div>
 
-                        <span>
-                            {config?.app_name ?? 'Team Timesheet'}
-                        </span>
-                    </div>
-                )}
+                        <div className="login-showcase-copy">
+                            <span className="login-eyebrow">
+                                WORK MANAGEMENT
+                            </span>
 
-                {error && (
-                    <Banner
-                        tone="danger"
-                        title="Sign-in failed"
-                    >
-                        {error}
-                    </Banner>
-                )}
+                            <h1>
+                                Your workday,
+                                <br />
+                                <span>in sync.</span>
+                            </h1>
 
-                <div className="login-body">
-                    {config?.oidc_enabled ? (
-                        <>
-                            <Button
-                                variant="primary"
-                                iconLeft="shield"
-                                onClick={startSso}
-                                loading={busy}
-                                className="btn-block"
-                            >
-                                Continue with IMS
-                            </Button>
-
-                            <p className="login-hint">
-                                You will be redirected to your
-                                organization's identity provider.
+                            <p>
+                                A simpler way to manage attendance, track
+                                your time, and keep your team moving forward.
                             </p>
-                        </>
-                    ) : (
-                        <Banner
-                            tone="info"
-                            title="SSO is not enabled"
-                        >
-                            Ask an administrator to enable IMS in{' '}
-                            <strong>
-                                Admin → SSO
-                            </strong>
-                            .
-                        </Banner>
-                    )}
+                        </div>
 
-                    {config?.local_dev_auth && (
-                        <div className="login-dev">
-                            <div className="login-dev-header">
-                                <span className="login-dev-rule" />
-
-                                <span className="login-dev-label">
-                                    Local development
+                        <div className="login-feature-list">
+                            <div className="login-feature">
+                                <span className="login-feature-icon">
+                                    <Icon name="clock" size={19} />
                                 </span>
-
-                                <span className="login-dev-rule" />
+                                <div>
+                                    <strong>Time, clearly tracked</strong>
+                                    <span>Keep daily entries organized.</span>
+                                </div>
                             </div>
 
-                            <Field
-                                label="Demo account"
-                                hint="Dev-only accounts. Not available in production."
-                            >
-                                {(id) => (
-                                    <Select
-                                        id={id}
-                                        value={devEmail}
-                                        onChange={(e) =>
-                                            setDevEmail(
-                                                e.target.value,
-                                            )
-                                        }
-                                    >
-                                        {DEMO_USERS.map((u) => (
-                                            <option
-                                                key={u.email}
-                                                value={u.email}
-                                            >
-                                                {u.label}
-                                            </option>
-                                        ))}
-                                    </Select>
-                                )}
-                            </Field>
+                            <div className="login-feature">
+                                <span className="login-feature-icon">
+                                    <Icon name="users" size={19} />
+                                </span>
+                                <div>
+                                    <strong>Teams, better aligned</strong>
+                                    <span>Make reviews and approvals simpler.</span>
+                                </div>
+                            </div>
 
-                            <Button
-                                variant="secondary"
-                                iconLeft="arrow-right"
-                                onClick={devLogin}
-                                loading={busy}
-                                className="btn-block"
-                            >
-                                Continue as {devEmail}
-                            </Button>
+                            <div className="login-feature">
+                                <span className="login-feature-icon">
+                                    <Icon name="shield-check" size={19} />
+                                </span>
+                                <div>
+                                    <strong>Access with confidence</strong>
+                                    <span>Sign in through your organization.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="login-showcase-footer">
+                            <span className="login-status-dot" />
+                            Built for focused, accountable work.
+                        </div>
+                    </div>
+
+                    <div className="login-orbit login-orbit-one" />
+                    <div className="login-orbit login-orbit-two" />
+                    <div className="login-orbit login-orbit-three" />
+                </aside>
+            )}
+
+            <section className="login-main">
+                <div className="login-panel">
+                    {embedded && (
+                        <div className="login-embedded-title">
+                            <div className="brand-mark">TS</div>
+                            <span>{config?.app_name ?? 'Team Timesheet'}</span>
                         </div>
                     )}
+
+                    <div className="login-heading">
+                        <span className="login-eyebrow login-eyebrow-dark">
+                            YOUR WORKSPACE AWAITS
+                        </span>
+
+                        <h2>Welcome back</h2>
+
+                        <p>
+                            Sign in to access your timesheet and workspace.
+                        </p>
+                    </div>
+
+                    {error && (
+                        <div className="login-error">
+                            <Banner tone="danger" title="Sign-in failed">
+                                {error}
+                            </Banner>
+                        </div>
+                    )}
+
+                    <div className="login-body">
+                        {config?.oidc_enabled ? (
+                            <div className="login-sso-section">
+                                <Button
+                                    variant="primary"
+                                    iconLeft="shield"
+                                    onClick={startSso}
+                                    loading={busy}
+                                    className="btn-block"
+                                >
+                                    Continue with IMS
+                                </Button>
+
+                                <div className="login-divider">
+                                    <span>SECURE ORGANIZATION ACCESS</span>
+                                </div>
+
+                                <p className="login-hint">
+                                    You'll be redirected to your
+                                    organization's identity provider to
+                                    authenticate securely.
+                                </p>
+                            </div>
+                        ) : (
+                            <Banner tone="info" title="SSO is not enabled">
+                                Ask an administrator to enable IMS in{' '}
+                                <strong>Admin → SSO</strong>.
+                            </Banner>
+                        )}
+
+                        {config?.local_dev_auth && (
+                            <div className="login-dev">
+                                <div className="login-dev-header">
+                                    <span className="login-dev-rule" />
+                                    <span className="login-dev-label">
+                                        DEVELOPER ACCESS
+                                    </span>
+                                    <span className="login-dev-rule" />
+                                </div>
+
+                                <p className="login-dev-description">
+                                    Use a demo account to explore the
+                                    application locally.
+                                </p>
+
+                                <Field
+                                    label="Choose a demo account"
+                                    hint="Available only when local development authentication is enabled."
+                                >
+                                    {(id) => (
+                                        <Select
+                                            id={id}
+                                            value={devEmail}
+                                            onChange={(e) =>
+                                                setDevEmail(e.target.value)
+                                            }
+                                        >
+                                            {DEMO_USERS.map((u) => (
+                                                <option
+                                                    key={u.email}
+                                                    value={u.email}
+                                                >
+                                                    {u.label} · {u.role}
+                                                </option>
+                                            ))}
+                                        </Select>
+                                    )}
+                                </Field>
+
+                                <Button
+                                    variant="secondary"
+                                    iconLeft="arrow-right"
+                                    onClick={devLogin}
+                                    loading={busy}
+                                    className="btn-block"
+                                >
+                                    Continue as {selectedDemo?.label ?? 'demo user'}
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="login-privacy">
+                        <span className="login-privacy-icon">
+                            <Icon name="map-pin" size={15} />
+                        </span>
+                        <p>
+                            <strong>Your location stays private.</strong>
+                            <span>
+                                We record location only during check-in and
+                                check-out, never continuously.
+                            </span>
+                        </p>
+                    </div>
                 </div>
 
-                <div className="login-privacy">
-                    <Icon
-                        name="map-pin"
-                        size={12}
-                    />
-
-                    <span>
-                        We record your location only when you
-                        check in and check out — never continuously.
-                    </span>
-                </div>
-            </div>
-        </div>
+                <footer className="login-main-footer">
+                    <span>TEAM WORKSPACE</span>
+                    <span className="login-footer-separator">·</span>
+                    <span>SECURE SIGN-IN</span>
+                </footer>
+            </section>
+        </main>
     );
 }

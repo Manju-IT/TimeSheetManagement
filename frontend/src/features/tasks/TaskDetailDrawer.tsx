@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+
 import { tasksApi } from './api';
 import type { Task } from './types';
 import { ConflictDiffDialog } from './ConflictDiffDialog';
@@ -62,10 +63,10 @@ export function TaskDetailDrawer({ task, onClose }: { task: Task; onClose: () =>
                     </Banner>
                 )}
 
-                <div className="kv-grid">
+                <div className="kv-grid tasks-detail-grid">
                     <div className="kv">
                         <span className="muted small">Status</span>
-                        <span>{task.status}</span>
+                        <span className="tasks-detail-value">{task.status.replaceAll('_', ' ')}</span>
                     </div>
                     <div className="kv">
                         <span className="muted small">Sync state</span>
@@ -81,15 +82,15 @@ export function TaskDetailDrawer({ task, onClose }: { task: Task; onClose: () =>
                     </div>
                 </div>
 
-                <div className="field">
+                <div className="field tasks-description-field">
                     <div className="field-label">Description</div>
-                    <pre className="pre">{task.description || '—'}</pre>
+                    <pre className="pre">{task.description || 'No description provided.'}</pre>
                 </div>
 
                 {task.gh_url && (
-                    <a href={task.gh_url} target="_blank" rel="noreferrer" className="row" style={{ gap: 6 }}>
-                        <Icon name="external-link" size={12} />
-                        <span>Open in GitHub</span>
+                    <a href={task.gh_url} target="_blank" rel="noreferrer" className="row tasks-github-link">
+                        <Icon name="external-link" size={14} />
+                        <span>Open task in GitHub</span>
                     </a>
                 )}
             </Drawer>

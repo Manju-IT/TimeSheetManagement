@@ -8,7 +8,8 @@ type Name =
     | 'check-circle' | 'info' | 'lock' | 'external-link' | 'menu'
     | 'logout' | 'file-text' | 'bar-chart' | 'inbox' | 'inbox-empty'
     | 'spinner' | 'wifi-off' | 'eye' | 'eye-off' | 'more-horizontal'
-    | 'chart-no-axes-column-increasing' | 'lightbulb';
+    | 'chart-no-axes-column-increasing' | 'lightbulb' | 'list-checks'
+    | 'check-square';
 
 const PATHS: Record<Name, JSX.Element> = {
     'check': <polyline points="20 6 9 17 4 12" />,
@@ -51,6 +52,8 @@ const PATHS: Record<Name, JSX.Element> = {
     'more-horizontal': <><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></>,
     'chart-no-axes-column-increasing': <><line x1="12" y1="20" x2="12" y2="4" /><line x1="18" y1="20" x2="18" y2="8" /><line x1="6" y1="20" x2="6" y2="14" /></>,
     'lightbulb': <><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" /><path d="M9 18h6" /><path d="M10 22h4" /></>,
+    'list-checks': <><path d="M10 6h11" /><path d="M10 12h11" /><path d="M10 18h11" /><polyline points="3 6 4 7 6 5" /><polyline points="3 12 4 13 6 11" /><polyline points="3 18 4 19 6 17" /></>,
+    'check-square': <><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>,
 };
 
 interface Props extends Omit<SVGProps<SVGSVGElement>, 'name'> {

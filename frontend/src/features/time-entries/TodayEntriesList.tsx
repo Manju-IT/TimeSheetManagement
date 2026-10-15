@@ -1,5 +1,11 @@
+
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from '@tanstack/react-query';
+
 import { timeEntriesApi } from './api';
 import { projectsApi } from '@/features/projects/api';
 import { TimeEntryDrawer } from './TimeEntryDrawer';
@@ -7,6 +13,7 @@ import { QueuedEntryRow } from './QueuedEntryRow';
 import { OfflineQueueBanner } from './OfflineQueueBanner';
 import { useOfflineQueueItems } from './useOfflineQueueItems';
 import type { TimeEntry } from './types';
+
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Table, THead, TBody, TH, TD } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
@@ -21,27 +28,41 @@ import { classifyError } from '@/lib/errors';
 function todayIso() {
     const d = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
+
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function fmtMinutes(min: number) {
     if (!min) return '0h 00m';
+
     const h = Math.floor(min / 60);
     const m = min % 60;
+
     return `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
 export function TodayEntriesList() {
     const qc = useQueryClient();
     const toast = useToast();
+
     const [editing, setEditing] = useState<TimeEntry | null>(null);
     const [creating, setCreating] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<TimeEntry | null>(null);
 
     const q = useQuery({
-        queryKey: ['time-entries', { from_date: todayIso(), to_date: todayIso() }],
+        queryKey: [
+            'time-entries',
+            {
+                from_date: todayIso(),
+                to_date: todayIso(),
+            },
+        ],
         queryFn: () =>
-            timeEntriesApi.list({ from_date: todayIso(), to_date: todayIso(), page_size: 100 }),
+            timeEntriesApi.list({
+                from_date: todayIso(),
+                to_date: todayIso(),
+                page_size: 100,
+            }),
     });
 
     const projects = useQuery({
@@ -50,35 +71,51 @@ export function TodayEntriesList() {
     });
 
     const projectsById = useMemo(() => {
-        const m = new Map<string, string>();
-        for (const p of projects.data?.data ?? []) m.set(p.id, p.name);
-        return m;
+        const map = new Map<string, string>();
+
+        for (const project of projects.data?.data ?? []) {
+            map.set(project.id, project.name);
+        }
+
+        return map;
     }, [projects.data]);
 
     const queueItems = useOfflineQueueItems();
+
     const todayQueued = useMemo(() => {
         const today = todayIso();
-        const serverIds = new Set((q.data?.data ?? []).map((e) => e.id));
-        return queueItems.filter((i) => {
-            const wd = i.payload.work_date ?? today;
-            if (wd !== today) return false;
-            // Hide items whose server row is already visible.
-            if (i.serverId && serverIds.has(i.serverId)) return false;
+        const serverIds = new Set(
+            (q.data?.data ?? []).map((entry) => entry.id),
+        );
+
+        return queueItems.filter((item) => {
+            const workDate = item.payload.work_date ?? today;
+
+            if (workDate !== today) return false;
+
+            // Hide queued items whose server row is already visible.
+            if (item.serverId && serverIds.has(item.serverId)) {
+                return false;
+            }
+
             return true;
         });
     }, [queueItems, q.data]);
 
     const del = useMutation({
         mutationFn: (id: string) => timeEntriesApi.delete(id),
+
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['time-entries'] });
             qc.invalidateQueries({ queryKey: ['attendance'] });
+
             toast.success('Entry deleted');
             setPendingDelete(null);
         },
-        onError: (e) => {
-            const c = classifyError(e);
-            toast.error('Delete failed', c.message);
+
+        onError: (error) => {
+            const classified = classifyError(error);
+            toast.error('Delete failed', classified.message);
         },
     });
 
@@ -86,150 +123,252 @@ export function TodayEntriesList() {
     const hasAnything = serverRows.length > 0 || todayQueued.length > 0;
 
     return (
-        <Card>
-            <CardHeader
-                title="Today's entries"
-                subtitle={
-                    hasAnything
-                        ? `${serverRows.length} saved · ${todayQueued.length} queued`
-                        : undefined
-                }
-                actions={
-                    <Button
-                        variant="primary"
-                        size="sm"
-                        iconLeft="plus"
-                        onClick={() => setCreating(true)}
-                    >
-                        Add time entry
-                    </Button>
-                }
-            />
+        <div className="today-entries-card-shell">
+            <Card>
+                <div className="today-entries-card">
+                    <CardHeader
+                        title="Today's entries"
+                        subtitle={
+                            hasAnything
+                                ? `${serverRows.length} saved · ${todayQueued.length} queued`
+                                : undefined
+                        }
+                        actions={
+                            <Button
+                                variant="primary"
+                                size="sm"
+                                iconLeft="plus"
+                                onClick={() => setCreating(true)}
+                            >
+                                Add time entry
+                            </Button>
+                        }
+                    />
 
-            {q.isLoading && <SkeletonTable rows={3} cols={6} />}
-            {q.isError && (
-                <ErrorState
-                    title="Failed to load entries"
-                    message={classifyError(q.error).message}
-                    onRetry={() => q.refetch()}
-                />
-            )}
-
-            {!q.isLoading && !q.isError && (
-                <>
-                    <OfflineQueueBanner />
-                    {!hasAnything && (
-                        <EmptyState
-                            icon="clock"
-                            title="No entries yet today"
-                            description="Log your first task to start tracking time."
-                            action={
-                                <Button variant="primary" size="sm" iconLeft="plus" onClick={() => setCreating(true)}>
-                                    Add time entry
-                                </Button>
-                            }
-                        />
+                    {q.isLoading && (
+                        <div className="today-entries-content">
+                            <SkeletonTable rows={3} cols={6} />
+                        </div>
                     )}
-                    {hasAnything && (
-                        <Table>
-                            <THead>
-                                <tr>
-                                    <TH style={{ width: '22%' }}>Project</TH>
-                                    <TH style={{ width: '20%' }}>Task</TH>
-                                    <TH>Description</TH>
-                                    <TH style={{ width: 80 }}>Duration</TH>
-                                    <TH style={{ width: 90 }}>Links</TH>
-                                    <TH style={{ width: 130 }}>Status</TH>
-                                    <TH style={{ width: 130 }} />
-                                </tr>
-                            </THead>
-                            <TBody>
-                                {todayQueued.map((i) => (
-                                    <QueuedEntryRow
-                                        key={i.key}
-                                        item={i}
-                                        projectName={projectsById.get(i.payload.project_id) ?? null}
-                                        taskTitle={null}
+
+                    {q.isError && (
+                        <div className="today-entries-content">
+                            <ErrorState
+                                title="Failed to load entries"
+                                message={classifyError(q.error).message}
+                                onRetry={() => q.refetch()}
+                            />
+                        </div>
+                    )}
+
+                    {!q.isLoading && !q.isError && (
+                        <>
+                            <OfflineQueueBanner />
+
+                            {!hasAnything && (
+                                <div className="today-entries-empty">
+                                    <EmptyState
+                                        icon="clock"
+                                        title="No entries yet today"
+                                        description="Log your first task to start tracking time."
+                                        action={
+                                            <Button
+                                                variant="primary"
+                                                size="sm"
+                                                iconLeft="plus"
+                                                onClick={() => setCreating(true)}
+                                            >
+                                                Add time entry
+                                            </Button>
+                                        }
                                     />
-                                ))}
-                                {serverRows.map((e) => (
-                                    <tr key={e.id}>
-                                        <TD className="clip">{projectsById.get(e.project_id) ?? e.project_id.slice(0, 8)}</TD>
-                                        <TD className="clip">{e.task_title_snapshot ?? <span className="muted">—</span>}</TD>
-                                        <TD className="clip">{e.description || <span className="muted">—</span>}</TD>
-                                        <TD className="num">{fmtMinutes(e.duration_minutes)}</TD>
-                                        <TD>
-                                            {e.code_links.length === 0 ? (
-                                                <span className="muted">—</span>
-                                            ) : (
-                                                <span className="row" style={{ gap: 4 }}>
-                                                    {e.code_links.slice(0, 2).map((l) => (
-                                                        <a
-                                                            key={l.id}
-                                                            href={l.url}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="chip-link"
-                                                            title={l.url}
-                                                        >
-                                                            {l.link_type === 'commit' ? '⌥' : l.link_type === 'pull_request' ? 'PR' : '↗'}
-                                                        </a>
-                                                    ))}
-                                                    {e.code_links.length > 2 && (
-                                                        <span className="muted small">+{e.code_links.length - 2}</span>
-                                                    )}
-                                                </span>
-                                            )}
-                                        </TD>
-                                        <TD>
-                                            <StatusBadge status={e.status} />
-                                        </TD>
-                                        <TD className="row-actions">
-                                            {(e.status === 'draft' || e.status === 'rejected') && (
-                                                <>
-                                                    <Button variant="ghost" size="sm" onClick={() => setEditing(e)}>Edit</Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => setPendingDelete(e)}>Delete</Button>
-                                                </>
-                                            )}
-                                        </TD>
-                                    </tr>
-                                ))}
-                            </TBody>
-                        </Table>
+                                </div>
+                            )}
+
+                            {hasAnything && (
+                                <div className="today-entries-table">
+                                    <Table>
+                                        <THead>
+                                            <tr>
+                                                <TH style={{ width: '22%' }}>
+                                                    Project
+                                                </TH>
+                                                <TH style={{ width: '20%' }}>
+                                                    Task
+                                                </TH>
+                                                <TH>Description</TH>
+                                                <TH style={{ width: 100 }}>
+                                                    Duration
+                                                </TH>
+                                                <TH style={{ width: 90 }}>
+                                                    Links
+                                                </TH>
+                                                <TH style={{ width: 130 }}>
+                                                    Status
+                                                </TH>
+                                                <TH style={{ width: 130 }} />
+                                            </tr>
+                                        </THead>
+
+                                        <TBody>
+                                            {todayQueued.map((item) => (
+                                                <QueuedEntryRow
+                                                    key={item.key}
+                                                    item={item}
+                                                    projectName={
+                                                        projectsById.get(
+                                                            item.payload.project_id,
+                                                        ) ?? null
+                                                    }
+                                                    taskTitle={null}
+                                                />
+                                            ))}
+
+                                            {serverRows.map((entry) => (
+                                                <tr key={entry.id}>
+                                                    <TD className="clip">
+                                                        {projectsById.get(
+                                                            entry.project_id,
+                                                        ) ?? entry.project_id.slice(0, 8)}
+                                                    </TD>
+
+                                                    <TD className="clip">
+                                                        {entry.task_title_snapshot ?? (
+                                                            <span className="muted">
+                                                                —
+                                                            </span>
+                                                        )}
+                                                    </TD>
+
+                                                    <TD className="clip">
+                                                        {entry.description || (
+                                                            <span className="muted">
+                                                                —
+                                                            </span>
+                                                        )}
+                                                    </TD>
+
+                                                    <TD className="num">
+                                                        {fmtMinutes(
+                                                            entry.duration_minutes,
+                                                        )}
+                                                    </TD>
+
+                                                    <TD>
+                                                        {entry.code_links.length === 0 ? (
+                                                            <span className="muted">
+                                                                —
+                                                            </span>
+                                                        ) : (
+                                                            <span className="row today-entry-links">
+                                                                {entry.code_links
+                                                                    .slice(0, 2)
+                                                                    .map((link) => (
+                                                                        <a
+                                                                            key={link.id}
+                                                                            href={link.url}
+                                                                            target="_blank"
+                                                                            rel="noreferrer"
+                                                                            className="chip-link"
+                                                                            title={link.url}
+                                                                        >
+                                                                            {link.link_type === 'commit'
+                                                                                ? '⌥'
+                                                                                : link.link_type === 'pull_request'
+                                                                                    ? 'PR'
+                                                                                    : '↗'}
+                                                                        </a>
+                                                                    ))}
+
+                                                                {entry.code_links.length > 2 && (
+                                                                    <span className="muted small">
+                                                                        +{entry.code_links.length - 2}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </TD>
+
+                                                    <TD>
+                                                        <StatusBadge status={entry.status} />
+                                                    </TD>
+
+                                                    <TD className="row-actions">
+                                                        {(entry.status === 'draft' ||
+                                                            entry.status === 'rejected') && (
+                                                                <>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() =>
+                                                                            setEditing(entry)
+                                                                        }
+                                                                    >
+                                                                        Edit
+                                                                    </Button>
+
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() =>
+                                                                            setPendingDelete(entry)
+                                                                        }
+                                                                    >
+                                                                        Delete
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                    </TD>
+                                                </tr>
+                                            ))}
+                                        </TBody>
+                                    </Table>
+                                </div>
+                            )}
+                        </>
                     )}
-                </>
-            )}
+                </div>
 
-            <TimeEntryDrawer
-                open={creating || !!editing}
-                onClose={() => { setCreating(false); setEditing(null); }}
-                entry={editing}
-                defaultDate={todayIso()}
-            />
+                <TimeEntryDrawer
+                    open={creating || !!editing}
+                    onClose={() => {
+                        setCreating(false);
+                        setEditing(null);
+                    }}
+                    entry={editing}
+                    defaultDate={todayIso()}
+                />
 
-            <ConfirmDialog
-                open={!!pendingDelete}
-                title="Delete time entry?"
-                message={
-                    pendingDelete
-                        ? `"${pendingDelete.description || 'Untitled entry'}" will be permanently removed.`
-                        : undefined
-                }
-                confirmLabel="Delete"
-                danger
-                busy={del.isPending}
-                onCancel={() => setPendingDelete(null)}
-                onConfirm={() => pendingDelete && del.mutate(pendingDelete.id)}
-            />
-        </Card>
+                <ConfirmDialog
+                    open={!!pendingDelete}
+                    title="Delete time entry?"
+                    message={
+                        pendingDelete
+                            ? `"${pendingDelete.description || 'Untitled entry'}" will be permanently removed.`
+                            : undefined
+                    }
+                    confirmLabel="Delete"
+                    danger
+                    busy={del.isPending}
+                    onCancel={() => setPendingDelete(null)}
+                    onConfirm={() =>
+                        pendingDelete && del.mutate(pendingDelete.id)
+                    }
+                />
+            </Card>
+        </div>
     );
 }
 
 function StatusBadge({ status }: { status: string }) {
     const tone =
-        status === 'approved' ? 'success'
-            : status === 'rejected' ? 'danger'
-                : status === 'submitted' ? 'info'
+        status === 'approved'
+            ? 'success'
+            : status === 'rejected'
+                ? 'danger'
+                : status === 'submitted'
+                    ? 'info'
                     : 'neutral';
+
     return <Badge tone={tone}>{status}</Badge>;
 }
